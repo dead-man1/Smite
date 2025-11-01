@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Copy, Trash2, CheckCircle, XCircle } from 'lucide-react'
+import { Plus, Copy, Trash2, CheckCircle, XCircle, Download } from 'lucide-react'
 import api from '../api/client'
 
 interface Node {
@@ -16,6 +16,10 @@ const Nodes = () => {
   const [nodes, setNodes] = useState<Node[]>([])
   const [loading, setLoading] = useState(true)
   const [showAddModal, setShowAddModal] = useState(false)
+  const [showCertModal, setShowCertModal] = useState(false)
+  const [certContent, setCertContent] = useState<string>('')
+  const [certLoading, setCertLoading] = useState(false)
+  const [copied, setCopied] = useState(false)
 
   useEffect(() => {
     fetchNodes()
@@ -34,12 +38,27 @@ const Nodes = () => {
 
   const copyToClipboard = (text: string) => {
     navigator.clipboard.writeText(text)
-    alert('Copied to clipboard!')
+    setCopied(true)
+    setTimeout(() => setCopied(false), 2000)
+  }
+
+  const showCA = async () => {
+    setShowCertModal(true)
+    setCertLoading(true)
+    try {
+      const response = await api.get('/panel/ca')
+      setCertContent(response.data)
+    } catch (error) {
+      console.error('Failed to fetch CA:', error)
+      alert('Failed to fetch CA certificate')
+    } finally {
+      setCertLoading(false)
+    }
   }
 
   const downloadCA = async () => {
     try {
-      const response = await api.get('/panel/ca', { responseType: 'blob' })
+      const response = await api.get('/panel/ca?download=true', { responseType: 'blob' })
       const url = window.URL.createObjectURL(new Blob([response.data]))
       const link = document.createElement('a')
       link.href = url
@@ -74,10 +93,18 @@ const Nodes = () => {
         <h1 className="text-3xl font-bold text-gray-900">Nodes</h1>
         <div className="flex gap-3">
           <button
-            onClick={downloadCA}
-            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors"
+            onClick={showCA}
+            className="px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors flex items-center gap-2"
           >
-            Download CA Certificate
+            <Copy size={20} />
+            View CA Certificate
+          </button>
+          <button
+            onClick={downloadCA}
+            className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 transition-colors flex items-center gap-2"
+          >
+            <Download size={20} />
+            Download CA
           </button>
           <button
             onClick={() => setShowAddModal(true)}
@@ -169,6 +196,16 @@ const Nodes = () => {
           }}
         />
       )}
+
+      {showCertModal && (
+        <CertModal
+          certContent={certContent}
+          loading={certLoading}
+          onClose={() => setShowCertModal(false)}
+          onCopy={() => copyToClipboard(certContent)}
+          copied={copied}
+        />
+      )}
     </div>
   )
 }
@@ -239,6 +276,74 @@ const AddNodeModal = ({ onClose, onSuccess }: AddNodeModalProps) => {
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  )
+}
+
+interface CertModalProps {
+  certContent: string
+  loading: boolean
+  onClose: () => void
+  onCopy: () => void
+  copied: boolean
+}
+
+const CertModal = ({ certContent, loading, onClose, onCopy, copied }: CertModalProps) => {
+  return (
+    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+      <div className="bg-white rounded-lg p-6 w-full max-w-2xl max-h-[90vh] flex flex-col">
+        <div className="flex justify-between items-center mb-4">
+          <h2 className="text-xl font-bold text-gray-900">CA Certificate</h2>
+          <button
+            onClick={onClose}
+            className="text-gray-400 hover:text-gray-600"
+          >
+            <XCircle size={24} />
+          </button>
+        </div>
+        
+        <div className="mb-4 p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+          <p className="text-sm text-yellow-800">
+            <strong>Node Installation:</strong> Copy this certificate and paste it when prompted during node installation. 
+            Save it as <code className="bg-yellow-100 px-1 rounded">certs/ca.crt</code> on the node.
+          </p>
+        </div>
+
+        {loading ? (
+          <div className="flex-1 flex items-center justify-center">
+            <div className="text-gray-500">Loading certificate...</div>
+          </div>
+        ) : (
+          <>
+            <textarea
+              readOnly
+              value={certContent}
+              className="flex-1 w-full px-4 py-3 border border-gray-300 rounded-lg font-mono text-sm bg-gray-50 resize-none"
+              style={{ minHeight: '300px' }}
+            />
+            
+            <div className="flex justify-end gap-3 mt-4">
+              <button
+                onClick={onCopy}
+                className={`px-4 py-2 rounded-lg transition-colors flex items-center gap-2 ${
+                  copied
+                    ? 'bg-green-600 text-white'
+                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                }`}
+              >
+                <Copy size={16} />
+                {copied ? 'Copied!' : 'Copy Certificate'}
+              </button>
+              <button
+                onClick={onClose}
+                className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+              >
+                Close
+              </button>
+            </div>
+          </>
+        )}
       </div>
     </div>
   )
