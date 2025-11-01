@@ -13,11 +13,18 @@ async def get_ca_cert(download: bool = False):
     from app.hysteria2_server import Hysteria2Server
     import os
     
-    # Resolve certificate path (handle relative paths)
-    cert_path = Path(settings.hysteria2_cert_path)
+    # Resolve certificate path - in Docker, working dir is /app
+    # settings.hysteria2_cert_path is "./certs/ca.crt" 
+    # We need to resolve it to /app/certs/ca.crt
+    cert_path_str = settings.hysteria2_cert_path
+    cert_path = Path(cert_path_str)
+    
+    # If relative path, resolve from current working directory (should be /app in container)
     if not cert_path.is_absolute():
-        # If relative, resolve from app directory
-        cert_path = Path(__file__).parent.parent.parent / cert_path
+        base_dir = Path(os.getcwd())
+        cert_path = base_dir / cert_path
+    
+    print(f"Looking for certificate at: {cert_path} (exists: {cert_path.exists()})")
     
     # Ensure parent directory exists
     cert_path.parent.mkdir(parents=True, exist_ok=True)
@@ -26,11 +33,10 @@ async def get_ca_cert(download: bool = False):
     if not cert_path.exists() or (cert_path.exists() and cert_path.stat().st_size == 0):
         print(f"CA certificate missing or empty at {cert_path}, generating...")
         h2_server = Hysteria2Server()
+        # Update paths to use resolved paths
+        h2_server.cert_path = str(cert_path)
+        h2_server.key_path = str(cert_path.parent / "ca.key")
         await h2_server._generate_certs()
-        # Re-resolve path after generation
-        cert_path = Path(settings.hysteria2_cert_path)
-        if not cert_path.is_absolute():
-            cert_path = Path(__file__).parent.parent.parent / cert_path
         print(f"Certificate generated at {cert_path}")
     
     if not cert_path.exists():
@@ -39,9 +45,11 @@ async def get_ca_cert(download: bool = False):
     # Check if file is empty
     try:
         cert_content = cert_path.read_text()
+        print(f"Certificate file size: {len(cert_content)} bytes")
         if not cert_content or not cert_content.strip():
-            raise HTTPException(status_code=500, detail="CA certificate is empty")
+            raise HTTPException(status_code=500, detail="CA certificate is empty after generation")
     except Exception as e:
+        print(f"Error reading certificate: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to read certificate: {str(e)}")
     
     # If download parameter is true, return as file download
