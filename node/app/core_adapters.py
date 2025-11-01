@@ -1,0 +1,453 @@
+"""Core adapters for different tunnel types"""
+from typing import Protocol, Dict, Any, Optional
+from abc import ABC, abstractmethod
+import subprocess
+import json
+import os
+import psutil
+import time
+from pathlib import Path
+
+
+class CoreAdapter(Protocol):
+    """Protocol for core adapters"""
+    name: str
+    
+    def apply(self, tunnel_id: str, spec: Dict[str, Any]) -> None:
+        """Apply tunnel configuration"""
+        ...
+    
+    def remove(self, tunnel_id: str) -> None:
+        """Remove tunnel"""
+        ...
+    
+    def status(self, tunnel_id: str) -> Dict[str, Any]:
+        """Get tunnel status"""
+        ...
+    
+    def get_usage_mb(self, tunnel_id: str) -> float:
+        """Get usage in MB"""
+        ...
+
+
+class TCPAdapter:
+    """TCP tunnel via xray-core"""
+    name = "tcp"
+    
+    def __init__(self):
+        self.config_dir = Path("/etc/smite-node/xray")
+        self.config_dir.mkdir(parents=True, exist_ok=True)
+        self.processes = {}  # Track running processes
+    
+    def apply(self, tunnel_id: str, spec: Dict[str, Any]):
+        """Apply TCP tunnel"""
+        config = {
+            "log": {"loglevel": "warning"},
+            "inbounds": [{
+                "port": spec.get("listen_port", 10000),
+                "protocol": "socks",
+                "settings": {
+                    "auth": "noauth",
+                    "udp": True
+                }
+            }],
+            "outbounds": [{
+                "protocol": "freedom",
+                "settings": {}
+            }]
+        }
+        
+        config_path = self.config_dir / f"{tunnel_id}.json"
+        with open(config_path, "w") as f:
+            json.dump(config, f)
+        
+        # Start xray-core
+        try:
+            proc = subprocess.Popen(
+                ["/usr/local/bin/xray", "-config", str(config_path)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+            self.processes[tunnel_id] = proc
+            time.sleep(0.5)  # Give it a moment to start
+            if proc.poll() is not None:
+                # Process died immediately
+                stderr = proc.stderr.read().decode() if proc.stderr else "Unknown error"
+                raise RuntimeError(f"xray failed to start: {stderr}")
+        except FileNotFoundError:
+            # Fallback to system xray if installed
+            proc = subprocess.Popen(
+                ["xray", "-config", str(config_path)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+            self.processes[tunnel_id] = proc
+            time.sleep(0.5)
+            if proc.poll() is not None:
+                stderr = proc.stderr.read().decode() if proc.stderr else "Unknown error"
+                raise RuntimeError(f"xray failed to start: {stderr}")
+    
+    def remove(self, tunnel_id: str):
+        """Remove TCP tunnel"""
+        config_path = self.config_dir / f"{tunnel_id}.json"
+        
+        # Stop process if tracked
+        if tunnel_id in self.processes:
+            proc = self.processes[tunnel_id]
+            try:
+                proc.terminate()
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+            except:
+                pass
+            del self.processes[tunnel_id]
+        
+        # Also try pkill as fallback
+        try:
+            subprocess.run(["pkill", "-f", f"xray.*{tunnel_id}"], check=False, timeout=3)
+        except:
+            pass
+            
+        if config_path.exists():
+            config_path.unlink()
+    
+    def status(self, tunnel_id: str) -> Dict[str, Any]:
+        """Get status"""
+        config_path = self.config_dir / f"{tunnel_id}.json"
+        is_running = False
+        
+        if tunnel_id in self.processes:
+            proc = self.processes[tunnel_id]
+            is_running = proc.poll() is None
+        
+        return {
+            "active": config_path.exists() and is_running,
+            "type": "tcp",
+            "config_exists": config_path.exists(),
+            "process_running": is_running
+        }
+    
+    def get_usage_mb(self, tunnel_id: str) -> float:
+        """Get usage in MB"""
+        # Try to get stats from xray API or process
+        if tunnel_id in self.processes:
+            proc = self.processes[tunnel_id]
+            try:
+                # Get process I/O stats
+                proc_info = psutil.Process(proc.pid)
+                io_counters = proc_info.io_counters()
+                bytes_sent = io_counters.read_bytes + io_counters.write_bytes
+                return bytes_sent / (1024 * 1024)  # Convert to MB
+            except:
+                pass
+        return 0.0
+
+
+class UDPAdapter(TCPAdapter):
+    """UDP tunnel via xray-core"""
+    name = "udp"
+    
+    def apply(self, tunnel_id: str, spec: Dict[str, Any]):
+        """Apply UDP tunnel"""
+        # Similar to TCP but with UDP-specific config
+        super().apply(tunnel_id, spec)
+
+
+class WSAdapter(TCPAdapter):
+    """WebSocket tunnel via xray-core"""
+    name = "ws"
+    
+    def apply(self, tunnel_id: str, spec: Dict[str, Any]):
+        """Apply WebSocket tunnel"""
+        config = {
+            "log": {"loglevel": "warning"},
+            "inbounds": [{
+                "port": spec.get("listen_port", 10000),
+                "protocol": "vmess",
+                "settings": {
+                    "clients": [{"id": spec.get("uuid", "")}]
+                },
+                "streamSettings": {
+                    "network": "ws",
+                    "wsSettings": {
+                        "path": spec.get("path", "/")
+                    }
+                }
+            }],
+            "outbounds": [{
+                "protocol": "freedom",
+                "settings": {}
+            }]
+        }
+        
+        config_path = self.config_dir / f"{tunnel_id}.json"
+        with open(config_path, "w") as f:
+            json.dump(config, f)
+
+
+class GRPCAdapter(TCPAdapter):
+    """gRPC tunnel via xray-core"""
+    name = "grpc"
+    
+    def apply(self, tunnel_id: str, spec: Dict[str, Any]):
+        """Apply gRPC tunnel"""
+        config = {
+            "log": {"loglevel": "warning"},
+            "inbounds": [{
+                "port": spec.get("listen_port", 10000),
+                "protocol": "vmess",
+                "settings": {
+                    "clients": [{"id": spec.get("uuid", "")}]
+                },
+                "streamSettings": {
+                    "network": "grpc",
+                    "grpcSettings": {
+                        "serviceName": spec.get("service_name", "GrpcService")
+                    }
+                }
+            }],
+            "outbounds": [{
+                "protocol": "freedom",
+                "settings": {}
+            }]
+        }
+        
+        config_path = self.config_dir / f"{tunnel_id}.json"
+        with open(config_path, "w") as f:
+            json.dump(config, f)
+
+
+class WireGuardAdapter:
+    """WireGuard tunnel adapter"""
+    name = "wireguard"
+    
+    def __init__(self):
+        self.config_dir = Path("/etc/wireguard")
+        self.config_dir.mkdir(parents=True, exist_ok=True)
+        self.active_interfaces = set()
+    
+    def apply(self, tunnel_id: str, spec: Dict[str, Any]):
+        """Apply WireGuard tunnel"""
+        config = f"""[Interface]
+PrivateKey = {spec.get('private_key', '')}
+Address = {spec.get('address', '10.0.0.1/24')}
+ListenPort = {spec.get('listen_port', 51820)}
+
+[Peer]
+PublicKey = {spec.get('peer_public_key', '')}
+AllowedIPs = {spec.get('allowed_ips', '0.0.0.0/0')}
+Endpoint = {spec.get('endpoint', '')}
+"""
+        
+        config_path = self.config_dir / f"{tunnel_id}.conf"
+        with open(config_path, "w") as f:
+            f.write(config)
+        
+        # Start wireguard
+        try:
+            result = subprocess.run(
+                ["wg-quick", "up", str(config_path)],
+                check=True,
+                capture_output=True,
+                text=True,
+                timeout=10
+            )
+            self.active_interfaces.add(tunnel_id)
+        except subprocess.CalledProcessError as e:
+            raise RuntimeError(f"WireGuard failed to start: {e.stderr}")
+        except subprocess.TimeoutExpired:
+            raise RuntimeError("WireGuard start timed out")
+    
+    def remove(self, tunnel_id: str):
+        """Remove WireGuard tunnel"""
+        config_path = self.config_dir / f"{tunnel_id}.conf"
+        if config_path.exists():
+            try:
+                subprocess.run(
+                    ["wg-quick", "down", str(config_path)],
+                    check=False,
+                    timeout=10,
+                    capture_output=True
+                )
+            except:
+                pass
+            config_path.unlink()
+            self.active_interfaces.discard(tunnel_id)
+    
+    def status(self, tunnel_id: str) -> Dict[str, Any]:
+        """Get status"""
+        config_path = self.config_dir / f"{tunnel_id}.conf"
+        interface_name = f"wg-{tunnel_id}"[:15]  # wg-quick creates interfaces
+        
+        # Check if interface exists
+        try:
+            result = subprocess.run(
+                ["ip", "link", "show", interface_name],
+                capture_output=True,
+                timeout=2
+            )
+            is_active = result.returncode == 0
+        except:
+            is_active = False
+        
+        return {
+            "active": config_path.exists() and is_active,
+            "type": "wireguard",
+            "interface": interface_name if is_active else None
+        }
+    
+    def get_usage_mb(self, tunnel_id: str) -> float:
+        """Get usage in MB"""
+        # TODO: Implement WireGuard usage tracking
+        return 0.0
+
+
+class RatholeAdapter:
+    """Rathole reverse tunnel adapter"""
+    name = "rathole"
+    
+    def __init__(self):
+        self.config_dir = Path("/etc/smite-node/rathole")
+        self.config_dir.mkdir(parents=True, exist_ok=True)
+        self.processes = {}  # Track running processes
+    
+    def apply(self, tunnel_id: str, spec: Dict[str, Any]):
+        """Apply Rathole tunnel"""
+        config = f"""[client]
+remote_addr = "{spec.get('remote_addr', '')}"
+token = "{spec.get('token', '')}"
+
+[client.services.{tunnel_id}]
+local_addr = "{spec.get('local_addr', '127.0.0.1:8080')}"
+"""
+        
+        config_path = self.config_dir / f"{tunnel_id}.toml"
+        with open(config_path, "w") as f:
+            f.write(config)
+        
+        # Start rathole
+        try:
+            proc = subprocess.Popen(
+                ["/usr/local/bin/rathole", "-c", str(config_path)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+            self.processes[tunnel_id] = proc
+            time.sleep(0.5)
+            if proc.poll() is not None:
+                stderr = proc.stderr.read().decode() if proc.stderr else "Unknown error"
+                raise RuntimeError(f"rathole failed to start: {stderr}")
+        except FileNotFoundError:
+            proc = subprocess.Popen(
+                ["rathole", "-c", str(config_path)],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE
+            )
+            self.processes[tunnel_id] = proc
+            time.sleep(0.5)
+            if proc.poll() is not None:
+                stderr = proc.stderr.read().decode() if proc.stderr else "Unknown error"
+                raise RuntimeError(f"rathole failed to start: {stderr}")
+    
+    def remove(self, tunnel_id: str):
+        """Remove Rathole tunnel"""
+        config_path = self.config_dir / f"{tunnel_id}.toml"
+        
+        # Stop process if tracked
+        if tunnel_id in self.processes:
+            proc = self.processes[tunnel_id]
+            try:
+                proc.terminate()
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+            except:
+                pass
+            del self.processes[tunnel_id]
+        
+        # Also try pkill as fallback
+        try:
+            subprocess.run(["pkill", "-f", f"rathole.*{tunnel_id}"], check=False, timeout=3)
+        except:
+            pass
+            
+        if config_path.exists():
+            config_path.unlink()
+    
+    def status(self, tunnel_id: str) -> Dict[str, Any]:
+        """Get status"""
+        config_path = self.config_dir / f"{tunnel_id}.toml"
+        is_running = False
+        
+        if tunnel_id in self.processes:
+            proc = self.processes[tunnel_id]
+            is_running = proc.poll() is None
+        
+        return {
+            "active": config_path.exists() and is_running,
+            "type": "rathole",
+            "config_exists": config_path.exists(),
+            "process_running": is_running
+        }
+    
+    def get_usage_mb(self, tunnel_id: str) -> float:
+        """Get usage in MB"""
+        if tunnel_id in self.processes:
+            proc = self.processes[tunnel_id]
+            try:
+                proc_info = psutil.Process(proc.pid)
+                io_counters = proc_info.io_counters()
+                bytes_sent = io_counters.read_bytes + io_counters.write_bytes
+                return bytes_sent / (1024 * 1024)
+            except:
+                pass
+        return 0.0
+
+
+class AdapterManager:
+    """Manager for core adapters"""
+    
+    def __init__(self):
+        self.adapters: Dict[str, CoreAdapter] = {
+            "tcp": TCPAdapter(),
+            "udp": UDPAdapter(),
+            "ws": WSAdapter(),
+            "grpc": GRPCAdapter(),
+            "wireguard": WireGuardAdapter(),
+            "rathole": RatholeAdapter(),
+        }
+        self.active_tunnels: Dict[str, CoreAdapter] = {}
+    
+    def get_adapter(self, tunnel_type: str) -> Optional[CoreAdapter]:
+        """Get adapter for tunnel type"""
+        return self.adapters.get(tunnel_type)
+    
+    async def apply_tunnel(self, tunnel_id: str, tunnel_type: str, spec: Dict[str, Any]):
+        """Apply tunnel using appropriate adapter"""
+        adapter = self.get_adapter(tunnel_type)
+        if not adapter:
+            raise ValueError(f"Unknown tunnel type: {tunnel_type}")
+        
+        adapter.apply(tunnel_id, spec)
+        self.active_tunnels[tunnel_id] = adapter
+    
+    async def remove_tunnel(self, tunnel_id: str):
+        """Remove tunnel"""
+        if tunnel_id in self.active_tunnels:
+            adapter = self.active_tunnels[tunnel_id]
+            adapter.remove(tunnel_id)
+            del self.active_tunnels[tunnel_id]
+    
+    async def get_tunnel_status(self, tunnel_id: str) -> Dict[str, Any]:
+        """Get tunnel status"""
+        if tunnel_id in self.active_tunnels:
+            adapter = self.active_tunnels[tunnel_id]
+            return adapter.status(tunnel_id)
+        return {"active": False}
+    
+    async def cleanup(self):
+        """Cleanup all tunnels"""
+        for tunnel_id in list(self.active_tunnels.keys()):
+            await self.remove_tunnel(tunnel_id)
+

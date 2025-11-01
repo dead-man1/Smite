@@ -1,0 +1,63 @@
+version: '3.8'
+
+# Smite Panel - Main docker-compose file
+# Usage: docker compose up -d
+# Or: docker compose -f docker/docker-compose.yml up -d
+
+services:
+  smite-panel:
+    build:
+      context: ./panel
+      dockerfile: Dockerfile
+    container_name: smite-panel
+    ports:
+      - "${PANEL_PORT:-8000}:8000/tcp"
+      - "${HYSTERIA2_PORT:-443}:443/tcp"
+      - "${HYSTERIA2_PORT:-443}:443/udp"
+    volumes:
+      - ./panel/data:/app/data
+      - ./panel/certs:/app/certs
+      - ./frontend/dist:/app/static
+    env_file:
+      - .env
+    environment:
+      - PANEL_PORT=${PANEL_PORT:-8000}
+      - PANEL_HOST=${PANEL_HOST:-0.0.0.0}
+      - DB_TYPE=${DB_TYPE:-sqlite}
+      - DB_PATH=${DB_PATH:-./data/smite.db}
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/api/status')"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - smite-network
+
+  # Optional: Separate frontend service (if not served by panel)
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: smite-frontend
+    ports:
+      - "3000:80"
+    depends_on:
+      - smite-panel
+    restart: unless-stopped
+    networks:
+      - smite-network
+    profiles:
+      - frontend
+
+networks:
+  smite-network:
+    driver: bridge
+
+volumes:
+  panel-data:
+    driver: local
+  panel-certs:
+    driver: local
+
