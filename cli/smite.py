@@ -74,14 +74,70 @@ def cmd_admin_create(args):
     username = args.username or input("Username: ")
     password = args.password or getpass.getpass("Password: ")
     
-    # Try to create via API first (if admin API endpoint exists)
-    # Otherwise, try direct database access
-    panel_url = get_panel_url()
-    
-    # For now, use direct database access (requires dependencies)
-    # In future, we can add an admin API endpoint
+    # First try: Use Docker exec (works on fresh installs)
     try:
-        # Add panel to path for imports
+        result = subprocess.run(
+            ["docker", "ps", "--filter", "name=smite-panel", "--format", "{{.Names}}"],
+            capture_output=True,
+            text=True,
+            timeout=5
+        )
+        if result.returncode == 0 and result.stdout.strip():
+            container_name = result.stdout.strip()
+            print(f"Creating admin via Docker container ({container_name})...")
+            
+            # Create Python script to run inside container
+            script = f"""
+import asyncio
+import sys
+from app.database import AsyncSessionLocal, init_db
+from app.models import Admin
+from sqlalchemy import select
+from passlib.context import CryptContext
+
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+async def create():
+    await init_db()
+    async with AsyncSessionLocal() as session:
+        result = await session.execute(select(Admin).where(Admin.username == "{username}"))
+        existing = result.scalar_one_or_none()
+        if existing:
+            print(f"Error: Admin user '{username}' already exists", file=sys.stderr)
+            sys.exit(1)
+        
+        password_hash = pwd_context.hash("{password}")
+        admin = Admin(username="{username}", password_hash=password_hash)
+        session.add(admin)
+        await session.commit()
+        print(f"Admin user '{username}' created successfully!")
+
+asyncio.run(create())
+"""
+            # Execute in container
+            proc = subprocess.run(
+                ["docker", "exec", "-i", container_name, "python", "-c", script],
+                capture_output=True,
+                text=True,
+                timeout=30
+            )
+            
+            if proc.returncode == 0:
+                print(proc.stdout)
+                return
+            else:
+                error_msg = proc.stderr.strip()
+                if "already exists" in error_msg:
+                    print(error_msg)
+                    sys.exit(1)
+                print(f"Warning: Docker exec failed: {error_msg}")
+                print("Trying local method...")
+    except (subprocess.TimeoutExpired, FileNotFoundError, subprocess.SubprocessError) as e:
+        print(f"Warning: Docker not available or container not running: {e}")
+        print("Trying local method...")
+    
+    # Second try: Use local dependencies
+    try:
         project_root = Path(__file__).parent.parent
         panel_path = project_root / "panel"
         if not panel_path.exists():
@@ -101,14 +157,12 @@ def cmd_admin_create(args):
         async def create():
             await init_db()
             async with AsyncSessionLocal() as session:
-                # Check if admin exists
                 result = await session.execute(select(Admin).where(Admin.username == username))
                 existing = result.scalar_one_or_none()
                 if existing:
                     print(f"Error: Admin user '{username}' already exists")
                     return
                 
-                # Create admin
                 password_hash = pwd_context.hash(password)
                 admin = Admin(username=username, password_hash=password_hash)
                 session.add(admin)
@@ -117,52 +171,15 @@ def cmd_admin_create(args):
         
         asyncio.run(create())
         
-    except ImportError as e:
-        print("Error: Panel dependencies not installed.")
-        print("Installing required dependencies...")
-        
-        # Try to install dependencies
-        panel_requirements = project_root / "panel" / "requirements.txt"
-        if panel_requirements.exists():
-            subprocess.run([
-                sys.executable, "-m", "pip", "install", 
-                "passlib[bcrypt]", "sqlalchemy", "aiosqlite", 
-                "cryptography", "python-jose[cryptography]"
-            ], check=False)
-            # Try again
-            try:
-                from app.database import AsyncSessionLocal, init_db
-                from app.models import Admin
-                from sqlalchemy import select
-                from passlib.context import CryptContext
-                import asyncio
-                
-                pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
-                
-                async def create():
-                    await init_db()
-                    async with AsyncSessionLocal() as session:
-                        result = await session.execute(select(Admin).where(Admin.username == username))
-                        existing = result.scalar_one_or_none()
-                        if existing:
-                            print(f"Error: Admin user '{username}' already exists")
-                            return
-                        
-                        password_hash = pwd_context.hash(password)
-                        admin = Admin(username=username, password_hash=password_hash)
-                        session.add(admin)
-                        await session.commit()
-                        print(f"Admin user '{username}' created successfully!")
-                
-                asyncio.run(create())
-            except Exception as e2:
-                print(f"Error: Failed to create admin: {e2}")
-                print("\nAlternative: Create admin via Docker:")
-                print(f"  docker compose exec smite-panel python -c \"from app.database import AsyncSessionLocal, init_db; from app.models import Admin; from sqlalchemy import select; from passlib.context import CryptContext; import asyncio; pwd = CryptContext(schemes=['bcrypt']); ...\"")
-                sys.exit(1)
-        else:
-            print(f"Error: Could not find panel requirements at {panel_requirements}")
-            sys.exit(1)
+    except ImportError:
+        print("Error: Panel dependencies not installed and Docker method failed.")
+        print("\nPlease either:")
+        print("  1. Start the panel: docker compose up -d")
+        print("  2. Install dependencies: pip install -r panel/requirements.txt")
+        sys.exit(1)
+    except Exception as e:
+        print(f"Error: Failed to create admin: {e}")
+        sys.exit(1)
 
 
 def cmd_status(args):
