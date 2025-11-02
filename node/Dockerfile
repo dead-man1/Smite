@@ -28,26 +28,26 @@ RUN ARCH=$(uname -m) && \
     elif [ "$ARCH" = "aarch64" ]; then ARCH="aarch64"; \
     else ARCH="x86_64"; fi && \
     echo "Getting latest rathole version..." && \
-    RATHOLE_VERSION=$(curl -sL https://api.github.com/repos/rapiz1/rathole/releases | jq -r '.[0].tag_name // "v0.4.9"') && \
+    RATHOLE_VERSION=$(curl -sL https://api.github.com/repos/rapiz1/rathole/releases | jq -r '.[0].tag_name // "v0.5.0"') && \
     echo "Downloading rathole ${RATHOLE_VERSION} for ${ARCH}..." && \
-    (curl -L "https://github.com/rapiz1/rathole/releases/download/${RATHOLE_VERSION}/rathole-${ARCH}-unknown-linux-musl.tar.gz" -o /tmp/rathole.tar.gz -f || \
-     curl -L "https://github.com/rapiz1/rathole/releases/download/${RATHOLE_VERSION}/rathole-${ARCH}-unknown-linux-gnu.tar.gz" -o /tmp/rathole.tar.gz -f || \
-     (echo "Trying alternative download method..." && \
-      RATHOLE_ASSET=$(curl -sL "https://api.github.com/repos/rapiz1/rathole/releases" | jq -r --arg arch "$ARCH" '.[0].assets[] | select(.name | contains($arch) and (contains("linux-musl") or contains("linux-gnu"))) | .browser_download_url' | head -1) && \
-      if [ -n "$RATHOLE_ASSET" ] && [ "$RATHOLE_ASSET" != "null" ]; then \
-          curl -L "$RATHOLE_ASSET" -o /tmp/rathole.tar.gz -f; \
-      else \
-          echo "Error: Could not find rathole binary for ${ARCH}"; \
-          exit 1; \
-      fi)) && \
-    if [ ! -f /tmp/rathole.tar.gz ] || [ ! -s /tmp/rathole.tar.gz ]; then \
-        echo "Error: Failed to download rathole"; \
+    RATHOLE_ASSET=$(curl -sL "https://api.github.com/repos/rapiz1/rathole/releases" | jq -r --arg arch "$ARCH" '.[0].assets[] | select(.name | contains($arch) and (contains("linux-gnu") or contains("linux-musl"))) | .browser_download_url' | head -1) && \
+    if [ -z "$RATHOLE_ASSET" ] || [ "$RATHOLE_ASSET" = "null" ]; then \
+        echo "Error: Could not find rathole binary for ${ARCH}"; \
         exit 1; \
     fi && \
-    file /tmp/rathole.tar.gz | grep -qE "(gzip|compressed)" && \
-    tar -xzf /tmp/rathole.tar.gz -C /tmp && \
+    echo "Downloading from: $RATHOLE_ASSET" && \
+    if echo "$RATHOLE_ASSET" | grep -q "\.zip$"; then \
+        curl -L "$RATHOLE_ASSET" -o /tmp/rathole.zip -f && \
+        unzip -q /tmp/rathole.zip -d /tmp && \
+        rm /tmp/rathole.zip; \
+    else \
+        curl -L "$RATHOLE_ASSET" -o /tmp/rathole.tar.gz -f && \
+        tar -xzf /tmp/rathole.tar.gz -C /tmp && \
+        rm /tmp/rathole.tar.gz; \
+    fi && \
     find /tmp -name "rathole" -type f -executable -exec mv {} /usr/local/bin/ \; && \
     chmod +x /usr/local/bin/rathole && \
+    rathole --version && \
     rm -rf /tmp/rathole*
 
 COPY requirements.txt .
