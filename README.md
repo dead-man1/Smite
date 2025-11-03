@@ -1,7 +1,7 @@
 # Smite - Tunneling Control Panel
 
 <div align="center">
-  <img src="assets/SmiteL.png" alt="Smite Logo" width="200"/>
+  <img src="assets/SmiteD.png" alt="Smite Logo" width="200"/>
 </div>
 
 A modern, Docker-first tunneling control panel for managing tunnels (TCP, UDP, WS, gRPC, WireGuard, Rathole).
