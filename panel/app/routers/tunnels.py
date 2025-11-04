@@ -115,7 +115,10 @@ async def create_tunnel(tunnel: TunnelCreate, request: Request, db: AsyncSession
             needs_gost_forwarding = db_tunnel.type in ["tcp", "udp", "ws", "grpc"] and db_tunnel.core == "xray"
             needs_rathole_server = db_tunnel.core == "rathole"
             
-            logger.info(f"Tunnel {db_tunnel.id}: needs_gost_forwarding={needs_gost_forwarding}, needs_rathole_server={needs_rathole_server}, type={db_tunnel.type}, core={db_tunnel.core}")
+            # Force log output - use print as well to ensure we see it
+            log_msg = f"Tunnel {db_tunnel.id}: needs_gost_forwarding={needs_gost_forwarding}, needs_rathole_server={needs_rathole_server}, type={db_tunnel.type}, core={db_tunnel.core}"
+            print(log_msg)
+            logger.info(log_msg)
             
             if needs_gost_forwarding:
                 remote_port = db_tunnel.spec.get("remote_port") or db_tunnel.spec.get("listen_port")
