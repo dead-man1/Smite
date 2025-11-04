@@ -135,6 +135,7 @@ async def create_tunnel(tunnel: TunnelCreate, request: Request, db: AsyncSession
                             else:
                                 node_address = api_address
                     
+                    logger.info(f"Tunnel {db_tunnel.id}: node_address={node_address}")
                     if node_address:
                         try:
                             # Use gost for forwarding
@@ -149,15 +150,16 @@ async def create_tunnel(tunnel: TunnelCreate, request: Request, db: AsyncSession
                             logger.info(f"Successfully started gost forwarding for tunnel {db_tunnel.id}")
                         except Exception as e:
                             # Log but don't fail tunnel creation
-                            import logging
-                            logger = logging.getLogger(__name__)
                             error_msg = str(e)
                             logger.error(f"Failed to start gost forwarding for tunnel {db_tunnel.id}: {error_msg}", exc_info=True)
                             db_tunnel.status = "error"
                             db_tunnel.error_message = f"Gost forwarding error: {error_msg}"
                     else:
+                        logger.warning(f"Tunnel {db_tunnel.id}: Node IP address not found in metadata")
                         db_tunnel.status = "error"
                         db_tunnel.error_message = "Node IP address not found in metadata"
+                else:
+                    logger.warning(f"Tunnel {db_tunnel.id}: Missing remote_port or gost_forwarder not available")
             
             elif needs_rathole_server:
                 # Start Rathole server on panel
