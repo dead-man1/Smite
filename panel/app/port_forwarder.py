@@ -96,38 +96,64 @@ class PortForwarder:
         remote_writer = None
         
         try:
-            # Connect to target node
+            # Connect to target node with longer timeout and keep-alive
             try:
+                # Create socket with keep-alive
+                sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                sock.setsockopt(socket.SOL_SOCKET, socket.SO_KEEPALIVE, 1)
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPIDLE, 60)
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPINTVL, 10)
+                sock.setsockopt(socket.IPPROTO_TCP, socket.TCP_KEEPCNT, 3)
+                
                 remote_reader, remote_writer = await asyncio.wait_for(
-                    asyncio.open_connection(target_host, target_port),
-                    timeout=5.0
+                    asyncio.open_connection(target_host, target_port, sock=sock),
+                    timeout=10.0  # Increased timeout
                 )
             except asyncio.TimeoutError:
                 logger.warning(f"Timeout connecting to {target_host}:{target_port}")
-                writer.close()
-                await writer.wait_closed()
+                try:
+                    writer.close()
+                    await writer.wait_closed()
+                except:
+                    pass
                 return
             except Exception as e:
                 logger.warning(f"Failed to connect to {target_host}:{target_port}: {e}")
-                writer.close()
-                await writer.wait_closed()
+                try:
+                    writer.close()
+                    await writer.wait_closed()
+                except:
+                    pass
                 return
             
-            # Create bidirectional forwarding
+            # Create bidirectional forwarding with better error handling
             async def forward(src_reader: StreamReader, dst_writer: StreamWriter, direction: str):
                 try:
                     while True:
-                        data = await src_reader.read(4096)
-                        if not data:
+                        try:
+                            # Use read with timeout to detect dead connections
+                            data = await asyncio.wait_for(src_reader.read(8192), timeout=300.0)
+                            if not data:
+                                break
+                            dst_writer.write(data)
+                            await dst_writer.drain()
+                        except asyncio.TimeoutError:
+                            # Send keep-alive or check if connection is alive
+                            try:
+                                dst_writer.write(b'')
+                                await dst_writer.drain()
+                            except:
+                                break
+                        except (ConnectionResetError, BrokenPipeError, OSError) as e:
+                            logger.debug(f"Connection {direction} reset: {e}")
                             break
-                        dst_writer.write(data)
-                        await dst_writer.drain()
                 except Exception as e:
                     logger.debug(f"Forwarding {direction} closed: {e}")
                 finally:
                     try:
-                        dst_writer.close()
-                        await dst_writer.wait_closed()
+                        if not dst_writer.is_closing():
+                            dst_writer.close()
+                            await dst_writer.wait_closed()
                     except:
                         pass
             

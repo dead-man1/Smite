@@ -154,30 +154,51 @@ class TCPAdapter:
         }
     
     def get_usage_mb(self, tunnel_id: str) -> float:
-        """Get usage in MB - tracks process I/O"""
+        """Get usage in MB - tracks network I/O via process connections"""
         if tunnel_id in self.processes:
             proc = self.processes[tunnel_id]
             try:
                 proc_info = psutil.Process(proc.pid)
-                # Get process I/O stats
-                io_counters = proc_info.io_counters()
-                # read_bytes + write_bytes includes disk I/O
-                # For network, we'd need xray stats API, but this gives us process activity
-                total_bytes = io_counters.read_bytes + io_counters.write_bytes
+                # Get network connections to estimate traffic
+                # Count bytes sent/received through connections
+                connections = proc_info.connections()
+                current_bytes = 0
+                
+                # Try to get network I/O from connections
+                # Note: This is an approximation - xray stats API would be better
+                for conn in connections:
+                    if conn.status == 'ESTABLISHED':
+                        # Estimate based on connection count (rough approximation)
+                        # Each connection typically has some traffic
+                        current_bytes += 1024  # Small base amount per connection
+                
+                # Also check process I/O but weight network connections more
+                try:
+                    io_counters = proc_info.io_counters()
+                    # Network I/O is typically much higher than disk for xray
+                    # If we have connections, assume most I/O is network
+                    if connections:
+                        # Estimate: 70% of I/O is network-related
+                        io_bytes = int((io_counters.read_bytes + io_counters.write_bytes) * 0.7)
+                        current_bytes = max(current_bytes, io_bytes)
+                except:
+                    pass
                 
                 # Track cumulative usage
                 if tunnel_id not in self.usage_tracking:
-                    self.usage_tracking[tunnel_id] = 0
+                    self.usage_tracking[tunnel_id] = 0.0
                 
-                # Update if we have new data
-                if total_bytes > self.usage_tracking[tunnel_id]:
-                    self.usage_tracking[tunnel_id] = total_bytes
+                # Update cumulative tracking
+                # Convert bytes to MB for tracking
+                current_mb = current_bytes / (1024 * 1024)
+                if current_mb > self.usage_tracking[tunnel_id]:
+                    self.usage_tracking[tunnel_id] = current_mb
                 
-                return self.usage_tracking[tunnel_id] / (1024 * 1024)  # Convert to MB
-            except (psutil.NoSuchProcess, psutil.AccessDenied, AttributeError, OSError):
+                return self.usage_tracking[tunnel_id]
+            except (psutil.NoSuchProcess, psutil.AccessDenied, AttributeError, OSError) as e:
                 # Return last known usage if process is gone
                 if tunnel_id in self.usage_tracking:
-                    return self.usage_tracking[tunnel_id] / (1024 * 1024)
+                    return self.usage_tracking[tunnel_id]
         return 0.0
 
 
@@ -249,6 +270,7 @@ class UDPAdapter(TCPAdapter):
                             "congestion": spec.get("congestion", False),
                             "readBufferSize": spec.get("read_buffer_size", 2),
                             "writeBufferSize": spec.get("write_buffer_size", 2),
+                            "seed": spec.get("seed", ""),  # Critical for mKCP - must match client
                             "header": {
                                 "type": spec.get("header_type", "none")
                             }
