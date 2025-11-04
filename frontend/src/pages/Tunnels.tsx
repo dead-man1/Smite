@@ -389,7 +389,7 @@ const EditTunnelModal = ({ tunnel, onClose, onSuccess }: EditTunnelModalProps) =
           {tunnel.core === 'xray' && (tunnel.type === 'tcp' || tunnel.type === 'ws' || tunnel.type === 'grpc') && (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Xray Panel Port
+                Smite Panel Port
               </label>
               <input
                 type="number"
@@ -559,7 +559,7 @@ const AddTunnelModal = ({ nodes, onClose, onSuccess }: AddTunnelModalProps) => {
       return { ...baseSpec, remote_addr: `${window.location.hostname}:23333`, token: '', local_addr: '127.0.0.1:8080' }
     }
 
-    // Xray core types
+    // Smite core types
     switch (type) {
       case 'ws':
         return { ...baseSpec, path: '/', uuid: generateUUID() }
@@ -578,7 +578,7 @@ const AddTunnelModal = ({ nodes, onClose, onSuccess }: AddTunnelModalProps) => {
     if (core === 'wireguard' || core === 'rathole') {
       newType = core // Type matches core for these
     } else if (formData.type === 'wireguard' || formData.type === 'rathole') {
-      newType = 'tcp' // Reset to default xray type
+      newType = 'tcp' // Reset to default smite type
     }
     setFormData({ ...formData, core, type: newType })
   }
@@ -639,7 +639,7 @@ const AddTunnelModal = ({ nodes, onClose, onSuccess }: AddTunnelModalProps) => {
                 onChange={(e) => handleCoreChange(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
               >
-                <option value="xray">Xray</option>
+                <option value="xray">Smite</option>
                 <option value="rathole">Rathole</option>
               </select>
             </div>
@@ -692,7 +692,7 @@ const AddTunnelModal = ({ nodes, onClose, onSuccess }: AddTunnelModalProps) => {
             {formData.core === 'xray' && (formData.type === 'tcp' || formData.type === 'udp' || formData.type === 'ws' || formData.type === 'grpc') && (
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                  Xray Panel Port
+                  Smite Panel Port
                 </label>
                 <input
                   type="number"
@@ -708,7 +708,7 @@ const AddTunnelModal = ({ nodes, onClose, onSuccess }: AddTunnelModalProps) => {
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                   {formData.type === 'tcp' || formData.type === 'udp'
-                    ? 'Xray panel port (e.g., 3x-ui port) to forward to' 
+                    ? 'Smite panel port (e.g., 3x-ui port) to forward to' 
                     : 'Leave empty for VMESS server, or enter port to forward to local service'}
                 </p>
               </div>
