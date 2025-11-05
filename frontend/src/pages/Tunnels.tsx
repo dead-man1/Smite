@@ -252,6 +252,9 @@ const EditTunnelModal = ({ tunnel, onClose, onSuccess }: EditTunnelModalProps) =
         if (formData.rathole_local_port) {
           updatedSpec.local_addr = `127.0.0.1:${formData.rathole_local_port}`
         }
+        // Proxy port (listen_port) is where clients connect to access the tunneled service
+        updatedSpec.remote_port = parseInt(formData.local_port.toString()) || parseInt(formData.rathole_local_port) || 8090
+        updatedSpec.listen_port = parseInt(formData.local_port.toString()) || parseInt(formData.rathole_local_port) || 8090
       } else if (tunnel.core === 'xray' && (tunnel.type === 'tcp' || tunnel.type === 'udp' || tunnel.type === 'ws' || tunnel.type === 'grpc' || tunnel.type === 'tcpmux')) {
         const remoteIp = formData.remote_ip || '127.0.0.1'
         const remotePort = parseInt(formData.remote_port.toString()) || 8080
@@ -480,7 +483,9 @@ const AddTunnelModal = ({ nodes, onClose, onSuccess }: AddTunnelModalProps) => {
         spec.remote_addr = `${remoteHost}:${remotePort}`
         spec.token = formData.rathole_token
         spec.local_addr = `127.0.0.1:${formData.rathole_local_port}`
-        spec.remote_port = parseInt(formData.remote_port.toString()) || 10000  // Proxy port for clients
+        // Proxy port (listen_port) is where clients connect to access the tunneled service
+        spec.remote_port = parseInt(formData.local_port.toString()) || parseInt(formData.rathole_local_port) || 8090
+        spec.listen_port = parseInt(formData.local_port.toString()) || parseInt(formData.rathole_local_port) || 8090
       }
       
       const payload = {
