@@ -42,31 +42,32 @@ class GostForwarder:
             
             # Build gost command based on tunnel type
             if tunnel_type == "tcp":
-                # TCP forwarding: gost -L=tcp://:local_port -F=tcp://node:remote_port
+                # TCP forwarding: gost -L=tcp://0.0.0.0:local_port -F=tcp://node:remote_port
+                # Use 0.0.0.0 to bind to all interfaces (required for host networking)
                 cmd = [
                     "/usr/local/bin/gost",
-                    f"-L=tcp://:{local_port}",
+                    f"-L=tcp://0.0.0.0:{local_port}",
                     f"-F=tcp://{node_address}:{remote_port}"
                 ]
             elif tunnel_type == "udp":
-                # UDP forwarding: gost -L=udp://:local_port -F=udp://node:remote_port
+                # UDP forwarding: gost -L=udp://0.0.0.0:local_port -F=udp://node:remote_port
                 cmd = [
                     "/usr/local/bin/gost",
-                    f"-L=udp://:{local_port}",
+                    f"-L=udp://0.0.0.0:{local_port}",
                     f"-F=udp://{node_address}:{remote_port}"
                 ]
             elif tunnel_type == "ws":
-                # WebSocket forwarding (no TLS): gost -L=ws://:local_port -F=tcp://node:remote_port
+                # WebSocket forwarding (no TLS): gost -L=ws://0.0.0.0:local_port -F=tcp://node:remote_port
                 cmd = [
                     "/usr/local/bin/gost",
-                    f"-L=ws://:{local_port}",
+                    f"-L=ws://0.0.0.0:{local_port}",
                     f"-F=tcp://{node_address}:{remote_port}"
                 ]
             elif tunnel_type == "grpc":
-                # gRPC forwarding (no TLS): gost -L=grpc://:local_port -F=tcp://node:remote_port
+                # gRPC forwarding (no TLS): gost -L=grpc://0.0.0.0:local_port -F=tcp://node:remote_port
                 cmd = [
                     "/usr/local/bin/gost",
-                    f"-L=grpc://:{local_port}",
+                    f"-L=grpc://0.0.0.0:{local_port}",
                     f"-F=tcp://{node_address}:{remote_port}"
                 ]
             else:
