@@ -68,19 +68,19 @@ class GostForwarder:
             elif tunnel_type == "ws":
                 # WebSocket forwarding: listen as WS, forward to TCP
                 # For VLESS over WS, the client connects via WebSocket, but target is TCP
-                # Use chain syntax: -L=ws://host:port/path/tcp://host:port
-                # Path is required for VLESS over WS (typically /)
+                # Use chain syntax: -L=ws://host:port/tcp://host:port
+                # For VLESS over WS, the path is typically /, which is the default
                 if ":" in forward_to:
                     forward_host, forward_port = forward_to.rsplit(":", 1)
                 else:
                     forward_host = forward_to
                     forward_port = "8080"
-                # WebSocket on listen side with explicit path, TCP on forward side
-                # Syntax: ws://listen/path/tcp://target
-                # For path=/ (root), use: ws://host:port//tcp://target (double slash means root path)
+                # WebSocket on listen side, TCP on forward side
+                # Syntax: ws://listen/tcp://target (path defaults to /)
+                # Note: gost WebSocket forwarding uses ws://host:port/tcp://target format
                 cmd = [
                     "/usr/local/bin/gost",
-                    f"-L=ws://0.0.0.0:{local_port}//tcp://{forward_host}:{forward_port}"
+                    f"-L=ws://0.0.0.0:{local_port}/tcp://{forward_host}:{forward_port}"
                 ]
             elif tunnel_type == "grpc":
                 # gRPC forwarding using chain syntax: -L=grpc://:port/host:port
