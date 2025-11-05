@@ -104,9 +104,12 @@ class GostForwarder:
                 debug_print(f"About to start subprocess.Popen with cmd={cmd}")
                 # Use log file for debugging (keep file open for subprocess)
                 log_file = self.config_dir / f"gost_{tunnel_id}.log"
+                # Ensure directory exists
+                log_file.parent.mkdir(parents=True, exist_ok=True)
                 log_f = open(log_file, 'w', buffering=1)  # Line buffered
                 log_f.write(f"Starting gost with command: {' '.join(cmd)}\n")
-                log_f.write(f"PID will be set after process starts\n")
+                log_f.write(f"Tunnel ID: {tunnel_id}\n")
+                log_f.write(f"Local port: {local_port}, Remote: {node_address}:{remote_port}\n")
                 log_f.flush()
                 proc = subprocess.Popen(
                     cmd,
@@ -122,6 +125,11 @@ class GostForwarder:
                 self.active_forwards[f"{tunnel_id}_log"] = log_f
                 debug_print(f"subprocess.Popen returned, PID={proc.pid}")
                 logger.info(f"Started gost process for tunnel {tunnel_id}, PID={proc.pid}, log file: {log_file}")
+                # Verify log file was created
+                if log_file.exists():
+                    debug_print(f"Log file created: {log_file}")
+                else:
+                    debug_print(f"Warning: Log file not found at {log_file}")
             except Exception as e:
                 error_msg = f"Failed to start gost process: {e}"
                 debug_print(f"ERROR in subprocess.Popen: {error_msg}")
