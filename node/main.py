@@ -31,7 +31,7 @@ async def usage_reporting_task(app: FastAPI):
             adapter_manager = app.state.adapter_manager
             h2_client = app.state.h2_client
             
-            if not adapter_manager or not h2_client or not h2_client.node_id:
+            if not adapter_manager or not h2_client or not hasattr(h2_client, 'node_id') or not h2_client.node_id:
                 continue
             
             # Collect usage for all active tunnels
@@ -75,19 +75,26 @@ async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
     # Start Hysteria2 client and connect to panel
     h2_client = Hysteria2Client()
-    await h2_client.start()
-    app.state.h2_client = h2_client
+    try:
+        await h2_client.start()
+        app.state.h2_client = h2_client
+        
+        # Auto-register with panel
+        try:
+            await h2_client.register_with_panel()
+        except Exception as e:
+            logger.warning(f"Could not register with panel: {e}")
+            logger.warning("Node will continue running but manual registration may be needed")
+    except Exception as e:
+        logger.error(f"Failed to start Hysteria2 client: {e}")
+        logger.error("Node API will still be available, but panel connection will not work")
+        logger.error("Make sure CA certificate is available at the configured path")
+        # Set h2_client to None so the node can still run
+        app.state.h2_client = None
     
-    # Initialize adapter manager
+    # Initialize adapter manager (always needed for tunnel management)
     adapter_manager = AdapterManager()
     app.state.adapter_manager = adapter_manager
-    
-    # Auto-register with panel
-    try:
-        await h2_client.register_with_panel()
-    except Exception as e:
-        print(f"Warning: Could not register with panel: {e}")
-        print("Node will continue running but manual registration may be needed")
     
     # Start usage reporting task
     usage_task = asyncio.create_task(usage_reporting_task(app))
@@ -102,8 +109,11 @@ async def lifespan(app: FastAPI):
             await app.state.usage_task
         except asyncio.CancelledError:
             pass
-    if hasattr(app.state, 'h2_client'):
-        await app.state.h2_client.stop()
+    if hasattr(app.state, 'h2_client') and app.state.h2_client:
+        try:
+            await app.state.h2_client.stop()
+        except:
+            pass
     if hasattr(app.state, 'adapter_manager'):
         await app.state.adapter_manager.cleanup()
 
