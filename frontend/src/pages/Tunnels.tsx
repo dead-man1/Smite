@@ -147,7 +147,7 @@ const Tunnels = () => {
             {/* Port Details */}
             <div className="space-y-3 mb-4">
               <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
-                <span className="text-sm text-gray-500 dark:text-gray-400">Proxy Port</span>
+                <span className="text-sm text-gray-500 dark:text-gray-400">Listen Port</span>
                 <span className="text-sm font-medium text-gray-900 dark:text-white">
                   {tunnel.spec?.remote_port || tunnel.spec?.listen_port || 'N/A'}
                 </span>
@@ -569,7 +569,7 @@ const AddTunnelModal = ({ nodes, onClose, onSuccess }: AddTunnelModalProps) => {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Proxy Port
+                Listen Port
               </label>
               <input
                 type="number"
@@ -585,7 +585,7 @@ const AddTunnelModal = ({ nodes, onClose, onSuccess }: AddTunnelModalProps) => {
               <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
                 {formData.core === 'rathole' 
                   ? 'Port on panel for clients to connect (should match local service port)'
-                  : 'Port on panel to listen for connections'}
+                  : 'Port on panel where clients will connect (e.g., 8080)'}
               </p>
             </div>
             {formData.core === 'xray' && (formData.type === 'tcp' || formData.type === 'udp' || formData.type === 'ws' || formData.type === 'grpc' || formData.type === 'tcpmux') && (
@@ -611,7 +611,7 @@ const AddTunnelModal = ({ nodes, onClose, onSuccess }: AddTunnelModalProps) => {
                   placeholder="127.0.0.1:2053"
                 />
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                  Target address (host:port) to forward traffic to (e.g., 127.0.0.1:2053 for 3x-ui)
+                  Target server address (host:port) to forward traffic to (e.g., 65.109.197.226:9999 for 3x-ui)
                 </p>
               </div>
             )}
