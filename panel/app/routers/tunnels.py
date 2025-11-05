@@ -205,40 +205,40 @@ async def create_tunnel(tunnel: TunnelCreate, request: Request, db: AsyncSession
                         db_tunnel.error_message = error_msg
             
             elif needs_rathole_server:
-                    # Start Rathole server on panel
-                    remote_addr = db_tunnel.spec.get("remote_addr")
-                    token = db_tunnel.spec.get("token")
-                    proxy_port = db_tunnel.spec.get("remote_port") or db_tunnel.spec.get("listen_port")
-                    
-                    # Validate remote_addr format
-                    if remote_addr and ":" in remote_addr:
-                        rathole_port = remote_addr.split(":")[1]
-                        # Check if using panel API port (8000) - this will conflict
-                        try:
-                            if int(rathole_port) == 8000:
-                                db_tunnel.status = "error"
-                                db_tunnel.error_message = "Rathole server cannot use port 8000 (panel API port). Use a different port like 23333."
-                                await db.commit()
-                                await db.refresh(db_tunnel)
-                                return db_tunnel
-                        except ValueError:
-                            pass
-                    
-                    if remote_addr and token and proxy_port and hasattr(request.app.state, 'rathole_server_manager'):
-                        try:
-                            request.app.state.rathole_server_manager.start_server(
-                                tunnel_id=db_tunnel.id,
-                                remote_addr=remote_addr,
-                                token=token,
-                                proxy_port=int(proxy_port)
-                            )
-                        except Exception as e:
-                            # Log but don't fail tunnel creation
-                            import logging
-                            error_msg = str(e)
-                            logging.error(f"Failed to start Rathole server: {error_msg}")
+                # Start Rathole server on panel
+                remote_addr = db_tunnel.spec.get("remote_addr")
+                token = db_tunnel.spec.get("token")
+                proxy_port = db_tunnel.spec.get("remote_port") or db_tunnel.spec.get("listen_port")
+                
+                # Validate remote_addr format
+                if remote_addr and ":" in remote_addr:
+                    rathole_port = remote_addr.split(":")[1]
+                    # Check if using panel API port (8000) - this will conflict
+                    try:
+                        if int(rathole_port) == 8000:
                             db_tunnel.status = "error"
-                            db_tunnel.error_message = f"Rathole server error: {error_msg}"
+                            db_tunnel.error_message = "Rathole server cannot use port 8000 (panel API port). Use a different port like 23333."
+                            await db.commit()
+                            await db.refresh(db_tunnel)
+                            return db_tunnel
+                    except ValueError:
+                        pass
+                
+                if remote_addr and token and proxy_port and hasattr(request.app.state, 'rathole_server_manager'):
+                    try:
+                        request.app.state.rathole_server_manager.start_server(
+                            tunnel_id=db_tunnel.id,
+                            remote_addr=remote_addr,
+                            token=token,
+                            proxy_port=int(proxy_port)
+                        )
+                    except Exception as e:
+                        # Log but don't fail tunnel creation
+                        import logging
+                        error_msg = str(e)
+                        logging.error(f"Failed to start Rathole server: {error_msg}")
+                        db_tunnel.status = "error"
+                        db_tunnel.error_message = f"Rathole server error: {error_msg}"
             except Exception as e:
                 # Catch any exception in the forwarding setup
                 debug_print(f"ERROR: Exception in forwarding setup: {e}")
