@@ -3,7 +3,7 @@
 <div align="center">
   <img src="assets/SmiteD.png" alt="Smite Logo" width="200"/>
   
-  **A modern, Docker-first tunneling control panel for managing tunnels (TCP, UDP, WS, gRPC, TCPMux, Rathole).**
+  **A modern, Docker-first tunneling control panel for managing tunnels (TCP, UDP, gRPC, TCPMux, Rathole).**
   
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 </div>
@@ -12,7 +12,7 @@
 
 ## 🚀 Features
 
-- **Multiple Tunnel Types**: Support for TCP, UDP, WebSocket, gRPC, TCPMux, and Rathole
+- **Multiple Tunnel Types**: Support for TCP, UDP, gRPC, TCPMux, and Rathole
 - **Docker-First**: Easy deployment with Docker Compose
 - **Web UI**: Modern, intuitive web interface for tunnel management
 - **CLI Tools**: Powerful command-line tools for management
@@ -74,7 +74,7 @@ smite admin create
 
 ## 🖥️ Node Installation
 
-> **Note**: Nodes are used for **Rathole** tunnels, providing easy reverse tunnel functionality. For GOST tunnels (TCP, UDP, WS, gRPC, TCPMux), you can forward directly without a node.
+> **Note**: Nodes are used for **Rathole** tunnels, providing easy reverse tunnel functionality. For GOST tunnels (TCP, UDP, gRPC, TCPMux), you can forward directly without a node.
 
 ### Quick Install
 
@@ -142,7 +142,6 @@ smite-node logs         # View logs
 ### GOST Tunnels (Direct Forwarding)
 - **TCP**: Simple TCP forwarding
 - **UDP**: UDP packet forwarding
-- **WebSocket**: WebSocket protocol forwarding
 - **gRPC**: gRPC protocol forwarding
 - **TCPMux**: TCP multiplexing for multiple connections
 

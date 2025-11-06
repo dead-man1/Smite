@@ -252,7 +252,7 @@ const EditTunnelModal = ({ tunnel, onClose, onSuccess }: EditTunnelModalProps) =
         // Proxy port (listen_port) is where clients connect to access the tunneled service
         updatedSpec.remote_port = parseInt(formData.local_port.toString()) || parseInt(formData.rathole_local_port) || 8090
         updatedSpec.listen_port = parseInt(formData.local_port.toString()) || parseInt(formData.rathole_local_port) || 8090
-      } else if (tunnel.core === 'xray' && (tunnel.type === 'tcp' || tunnel.type === 'udp' || tunnel.type === 'ws' || tunnel.type === 'grpc' || tunnel.type === 'tcpmux')) {
+      } else if (tunnel.core === 'xray' && (tunnel.type === 'tcp' || tunnel.type === 'udp' || tunnel.type === 'grpc' || tunnel.type === 'tcpmux')) {
         const remoteIp = formData.remote_ip || '127.0.0.1'
         const remotePort = parseInt(formData.remote_port.toString()) || 8080
         updatedSpec.remote_ip = remoteIp
@@ -308,7 +308,7 @@ const EditTunnelModal = ({ tunnel, onClose, onSuccess }: EditTunnelModalProps) =
             </p>
           </div>
           
-          {tunnel.core === 'xray' && (tunnel.type === 'tcp' || tunnel.type === 'udp' || tunnel.type === 'ws' || tunnel.type === 'grpc' || tunnel.type === 'tcpmux') && (
+          {tunnel.core === 'xray' && (tunnel.type === 'tcp' || tunnel.type === 'udp' || tunnel.type === 'grpc' || tunnel.type === 'tcpmux') && (
             <>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -389,7 +389,7 @@ const EditTunnelModal = ({ tunnel, onClose, onSuccess }: EditTunnelModalProps) =
             </>
           )}
           
-          {tunnel.core === 'xray' && (tunnel.type === 'tcp' || tunnel.type === 'udp' || tunnel.type === 'ws' || tunnel.type === 'grpc' || tunnel.type === 'tcpmux') && (
+          {tunnel.core === 'xray' && (tunnel.type === 'tcp' || tunnel.type === 'udp' || tunnel.type === 'grpc' || tunnel.type === 'tcpmux') && (
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                 Forward To
@@ -421,7 +421,7 @@ const EditTunnelModal = ({ tunnel, onClose, onSuccess }: EditTunnelModalProps) =
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+              className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
             >
               Cancel
             </button>
@@ -466,8 +466,8 @@ const AddTunnelModal = ({ nodes, onClose, onSuccess }: AddTunnelModalProps) => {
       // listen_port: panel port where clients connect (Shifter pattern)
       spec.listen_port = parseInt(formData.local_port.toString()) || 8080
       
-      // For GOST tunnels (TCP/UDP/WS/gRPC/TCPMux), set remote_ip and remote_port (Shifter pattern)
-      if (formData.core === 'xray' && (formData.type === 'tcp' || formData.type === 'udp' || formData.type === 'ws' || formData.type === 'grpc' || formData.type === 'tcpmux')) {
+      // For GOST tunnels (TCP/UDP/gRPC/TCPMux), set remote_ip and remote_port (Shifter pattern)
+      if (formData.core === 'xray' && (formData.type === 'tcp' || formData.type === 'udp' || formData.type === 'grpc' || formData.type === 'tcpmux')) {
         const remoteIp = formData.remote_ip || '127.0.0.1'
         const remotePort = parseInt(formData.remote_port.toString()) || 8080
         spec.remote_ip = remoteIp
@@ -516,8 +516,6 @@ const AddTunnelModal = ({ nodes, onClose, onSuccess }: AddTunnelModalProps) => {
 
     // GOST core types
     switch (type) {
-      case 'ws':
-        return { ...baseSpec, path: '/', uuid: generateUUID() }
       case 'grpc':
         return { ...baseSpec, service_name: 'GrpcService', uuid: generateUUID() }
       case 'udp':
@@ -548,8 +546,8 @@ const AddTunnelModal = ({ nodes, onClose, onSuccess }: AddTunnelModalProps) => {
 
   return (
     <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 overflow-auto">
-      <div className="bg-white rounded-lg p-6 w-full max-w-2xl my-8">
-        <h2 className="text-xl font-bold text-gray-900 mb-4">Create Tunnel</h2>
+      <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-2xl my-8">
+        <h2 className="text-xl font-bold text-gray-900 dark:text-white mb-4">Create Tunnel</h2>
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-4">
             <div>
@@ -616,7 +614,6 @@ const AddTunnelModal = ({ nodes, onClose, onSuccess }: AddTunnelModalProps) => {
                   <>
                     <option value="tcp">TCP</option>
                     <option value="udp">UDP</option>
-                    <option value="ws">WebSocket</option>
                     <option value="grpc">gRPC</option>
                     <option value="tcpmux">TCPMux</option>
                   </>
@@ -647,7 +644,7 @@ const AddTunnelModal = ({ nodes, onClose, onSuccess }: AddTunnelModalProps) => {
                   : 'Port on panel where clients will connect (e.g., 8080)'}
               </p>
             </div>
-            {formData.core === 'xray' && (formData.type === 'tcp' || formData.type === 'udp' || formData.type === 'ws' || formData.type === 'grpc' || formData.type === 'tcpmux') && (
+            {formData.core === 'xray' && (formData.type === 'tcp' || formData.type === 'udp' || formData.type === 'grpc' || formData.type === 'tcpmux') && (
               <>
                 <div>
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -752,7 +749,7 @@ const AddTunnelModal = ({ nodes, onClose, onSuccess }: AddTunnelModalProps) => {
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200"
+              className="px-4 py-2 bg-gray-100 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-lg hover:bg-gray-200 dark:hover:bg-gray-600"
             >
               Cancel
             </button>
