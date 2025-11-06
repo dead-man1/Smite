@@ -64,7 +64,7 @@ class GostForwarder:
                     forward_port = "8080"
                 cmd = [
                     "/usr/local/bin/gost",
-                    f"-L=ws://0.0.0.0:{local_port}/tcp://{forward_host}:{forward_port}"
+                    f"-L=ws://0.0.0.0:{local_port}?path=/tcp://{forward_host}:{forward_port}"
                 ]
             elif tunnel_type == "grpc":
                 if ":" in forward_to:
