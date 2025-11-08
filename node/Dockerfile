@@ -39,32 +39,20 @@ RUN ARCH=$(uname -m) && \
 
 # Stage 3: Install backhaul (cached layer)
 FROM base AS backhaul-bin
-ARG BACKHAUL_MODULE=github.com/Musixal/Backhaul
-ARG BACKHAUL_VERSION=latest
-ARG BACKHAUL_GIT_TOKEN=
-ENV GO111MODULE=on
-ENV GOBIN=/usr/local/bin
 RUN set -eux; \
     apt-get update; \
-    apt-get install -y git golang; \
+    apt-get install -y --no-install-recommends ca-certificates; \
     rm -rf /var/lib/apt/lists/*; \
     mkdir -p /opt/backhaul; \
-    if [ -n "${BACKHAUL_GIT_TOKEN}" ]; then \
-        git config --global url."https://${BACKHAUL_GIT_TOKEN}:x-oauth-basic@github.com/".insteadOf "https://github.com/"; \
-    fi; \
-    GOBIN=/tmp/backhaul-bin go install ${BACKHAUL_MODULE}/cmd/backhaul@${BACKHAUL_VERSION}; \
-    if [ -f /tmp/backhaul-bin/backhaul ]; then \
-        install -Dm755 /tmp/backhaul-bin/backhaul /opt/backhaul/backhaul; \
-    elif [ -f "$(go env GOPATH)/bin/backhaul" ]; then \
-        install -Dm755 "$(go env GOPATH)/bin/backhaul" /opt/backhaul/backhaul; \
-    else \
-        echo "Backhaul binary missing after installation"; \
-        ls -R "$(go env GOPATH)/bin" || true; \
-        exit 1; \
-    fi; \
-    if [ -n "${BACKHAUL_GIT_TOKEN}" ]; then \
-        rm -f /root/.gitconfig; \
-    fi; \
+    ARCH="$(uname -m)"; \
+    case "$ARCH" in \
+        x86_64|amd64) BACKHAUL_ASSET="backhaul-linux-amd64" ;; \
+        aarch64|arm64) BACKHAUL_ASSET="backhaul-linux-arm64" ;; \
+        *) echo "Unsupported architecture: $ARCH"; exit 1 ;; \
+    esac; \
+    BACKHAUL_URL="https://github.com/Musixal/Backhaul/releases/latest/download/${BACKHAUL_ASSET}"; \
+    curl -fsSL "$BACKHAUL_URL" -o /opt/backhaul/backhaul; \
+    chmod +x /opt/backhaul/backhaul; \
     /opt/backhaul/backhaul --version || true
 
 # Stage 4: Python dependencies (cached layer)
