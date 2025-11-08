@@ -13,11 +13,11 @@ FROM base AS rathole-bin
 RUN set -eux; \
     ARCH_RAW="$(uname -m)"; \
     case "$ARCH_RAW" in \
-        x86_64) ARCH="amd64" ;; \
-        aarch64) ARCH="arm64" ;; \
-        *) ARCH="amd64" ;; \
+        x86_64) ARCH="amd64"; RATHOLE_ARCH="x86_64" ;; \
+        aarch64) ARCH="arm64"; RATHOLE_ARCH="aarch64" ;; \
+        *) ARCH="amd64"; RATHOLE_ARCH="x86_64" ;; \
     esac; \
-    RATHOLE_URL="https://github.com/rapiz1/rathole/releases/download/v0.5.0/rathole-$ARCH-unknown-linux-gnu.zip"; \
+    RATHOLE_URL="https://github.com/rapiz1/rathole/releases/download/v0.5.0/rathole-$RATHOLE_ARCH-unknown-linux-gnu.zip"; \
     TMP_DIR="$(mktemp -d)"; \
     curl -fsSL "$RATHOLE_URL" -o "$TMP_DIR/rathole.zip"; \
     unzip -q "$TMP_DIR/rathole.zip" -d "$TMP_DIR"; \
