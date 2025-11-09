@@ -6,9 +6,15 @@ SMITE_HTTPS_PORT=${SMITE_HTTPS_PORT:-443}
 SMITE_SSL_DOMAIN=${SMITE_SSL_DOMAIN:-REPLACE_DOMAIN}
 PANEL_PORT=${PANEL_PORT:-8000}
 
+# fallback to \$PANEL_PORT if upstream override not set
 if [ -z "$SMITE_PANEL_UPSTREAM" ]; then
   SMITE_PANEL_UPSTREAM="http://127.0.0.1:${PANEL_PORT}"
 fi
+
+# when running under stock nginx entrypoint the template expects literal variables,
+# so we stash the raw template placeholders before substituting our values.
+SMITE_HTTP_PLACEHOLDER="\${SMITE_HTTP_PORT}"
+SMITE_HTTPS_PLACEHOLDER="\${SMITE_HTTPS_PORT}"
 
 if [ "$SMITE_HTTPS_PORT" = "443" ]; then
   SMITE_HTTPS_REDIRECT_SUFFIX=""
@@ -21,6 +27,8 @@ export SMITE_HTTPS_PORT
 export SMITE_PANEL_UPSTREAM
 export SMITE_SSL_DOMAIN
 export SMITE_HTTPS_REDIRECT_SUFFIX
+export SMITE_HTTP_PLACEHOLDER
+export SMITE_HTTPS_PLACEHOLDER
 
 TEMPLATE_PATH="/etc/nginx/templates/default.conf.template"
 TARGET_PATH="/etc/nginx/conf.d/default.conf"
@@ -32,6 +40,7 @@ if [ ! -f "$TEMPLATE_PATH" ]; then
   exit 1
 fi
 
-envsubst '$SMITE_HTTP_PORT $SMITE_HTTPS_PORT $SMITE_HTTPS_REDIRECT_SUFFIX $SMITE_PANEL_UPSTREAM $SMITE_SSL_DOMAIN' < "$TEMPLATE_PATH" > "$TARGET_PATH"
+# substitute placeholders with actual values, but leave literal tokens for the base entrypoint
+envsubst '$SMITE_HTTP_PLACEHOLDER $SMITE_HTTPS_PLACEHOLDER $SMITE_HTTP_PORT $SMITE_HTTPS_PORT $SMITE_HTTPS_REDIRECT_SUFFIX $SMITE_PANEL_UPSTREAM $SMITE_SSL_DOMAIN' < "$TEMPLATE_PATH" > "$TARGET_PATH"
 
 exec nginx -g 'daemon off;'
