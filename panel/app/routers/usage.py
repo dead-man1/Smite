@@ -25,18 +25,32 @@ class UsageResponse(BaseModel):
     timestamp: str
 
 
+class UsageUpdate(BaseModel):
+    """Manual usage update - can be incremental or absolute"""
+    used_mb: float
+    absolute: bool = False  # If True, sets absolute value; if False, adds incrementally
+
+
 @router.post("/push")
 async def push_usage(usage_data: UsagePush, db: AsyncSession = Depends(get_db)):
-    """Node pushes usage data"""
+    """Node pushes usage data (incremental)"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
     result = await db.execute(select(Tunnel).where(Tunnel.id == usage_data.tunnel_id))
     tunnel = result.scalar_one_or_none()
     if not tunnel:
         raise HTTPException(status_code=404, detail="Tunnel not found")
     
-    tunnel.used_mb += usage_data.bytes_used / (1024 * 1024)
+    # Incremental usage in bytes, convert to MB and add
+    incremental_mb = usage_data.bytes_used / (1024 * 1024)
+    tunnel.used_mb += incremental_mb
+    
+    logger.info(f"Usage update for tunnel {usage_data.tunnel_id}: +{incremental_mb:.2f} MB (total: {tunnel.used_mb:.2f} MB)")
     
     if tunnel.quota_mb > 0 and tunnel.used_mb >= tunnel.quota_mb:
         tunnel.status = "error"
+        logger.warning(f"Tunnel {usage_data.tunnel_id} quota exceeded: {tunnel.used_mb:.2f} MB >= {tunnel.quota_mb:.2f} MB")
     
     usage = Usage(
         tunnel_id=usage_data.tunnel_id,
@@ -45,8 +59,9 @@ async def push_usage(usage_data: UsagePush, db: AsyncSession = Depends(get_db)):
     )
     db.add(usage)
     await db.commit()
+    await db.refresh(tunnel)
     
-    return {"status": "ok"}
+    return {"status": "ok", "used_mb": tunnel.used_mb}
 
 
 @router.get("/tunnel/{tunnel_id}")
@@ -62,6 +77,59 @@ async def get_tunnel_usage(tunnel_id: str, db: AsyncSession = Depends(get_db)):
         "used_mb": tunnel.used_mb,
         "quota_mb": tunnel.quota_mb,
         "remaining_mb": max(0, tunnel.quota_mb - tunnel.used_mb) if tunnel.quota_mb > 0 else None
+    }
+
+
+@router.put("/tunnel/{tunnel_id}")
+async def update_tunnel_usage(
+    tunnel_id: str, 
+    usage_update: UsageUpdate,
+    db: AsyncSession = Depends(get_db)
+):
+    """Manually update tunnel usage (for syncing with external sources like 3x-ui)"""
+    import logging
+    logger = logging.getLogger(__name__)
+    
+    result = await db.execute(select(Tunnel).where(Tunnel.id == tunnel_id))
+    tunnel = result.scalar_one_or_none()
+    if not tunnel:
+        raise HTTPException(status_code=404, detail="Tunnel not found")
+    
+    old_used_mb = tunnel.used_mb
+    
+    if usage_update.absolute:
+        # Set absolute value
+        tunnel.used_mb = usage_update.used_mb
+        incremental_mb = usage_update.used_mb - old_used_mb
+    else:
+        # Add incrementally
+        tunnel.used_mb += usage_update.used_mb
+        incremental_mb = usage_update.used_mb
+    
+    logger.info(f"Manual usage update for tunnel {tunnel_id}: {old_used_mb:.2f} MB -> {tunnel.used_mb:.2f} MB (change: {incremental_mb:+.2f} MB)")
+    
+    if tunnel.quota_mb > 0 and tunnel.used_mb >= tunnel.quota_mb:
+        tunnel.status = "error"
+        logger.warning(f"Tunnel {tunnel_id} quota exceeded: {tunnel.used_mb:.2f} MB >= {tunnel.quota_mb:.2f} MB")
+    
+    # Create a usage record for tracking
+    if incremental_mb > 0:
+        usage = Usage(
+            tunnel_id=tunnel_id,
+            node_id=tunnel.node_id or "manual",
+            bytes_used=int(incremental_mb * 1024 * 1024)
+        )
+        db.add(usage)
+    
+    await db.commit()
+    await db.refresh(tunnel)
+    
+    return {
+        "status": "ok",
+        "tunnel_id": tunnel_id,
+        "used_mb": tunnel.used_mb,
+        "previous_mb": old_used_mb,
+        "incremental_mb": incremental_mb
     }
 
 
