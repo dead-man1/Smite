@@ -201,8 +201,9 @@ async def get_traffic_stats(
     start_time = now - timedelta(hours=hours)
     
     # Get total traffic (sum of all tunnel.used_mb)
+    # Use coalesce to handle NULL values
     total_result = await db.execute(
-        select(func.sum(Tunnel.used_mb))
+        select(func.coalesce(func.sum(Tunnel.used_mb), 0.0))
     )
     total_mb = total_result.scalar() or 0.0
     
