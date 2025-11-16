@@ -188,18 +188,18 @@ async def _restore_chisel_servers():
                 if tunnel.core != "chisel":
                     continue
                 
-                server_port = tunnel.spec.get("server_port")
+                listen_port = tunnel.spec.get("listen_port") or tunnel.spec.get("remote_port") or tunnel.spec.get("server_port")
                 auth = tunnel.spec.get("auth")
                 fingerprint = tunnel.spec.get("fingerprint")
                 
-                if not server_port:
+                if not listen_port:
                     continue
                 
                 try:
                     use_ipv6 = tunnel.spec.get("use_ipv6", False)
                     chisel_server_manager.start_server(
                         tunnel_id=tunnel.id,
-                        server_port=int(server_port),
+                        server_port=int(listen_port),
                         auth=auth,
                         fingerprint=fingerprint,
                         use_ipv6=bool(use_ipv6)

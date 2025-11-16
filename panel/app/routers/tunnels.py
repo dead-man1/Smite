@@ -180,15 +180,16 @@ async def create_tunnel(tunnel: TunnelCreate, request: Request, db: AsyncSession
                     return db_tunnel
         
         if needs_chisel_server:
-            server_port = db_tunnel.spec.get("server_port")
+            # Use listen_port or remote_port as the port where clients connect (like Rathole's proxy_port)
+            listen_port = db_tunnel.spec.get("listen_port") or db_tunnel.spec.get("remote_port") or db_tunnel.spec.get("server_port")
             auth = db_tunnel.spec.get("auth")
             fingerprint = db_tunnel.spec.get("fingerprint")
             use_ipv6 = db_tunnel.spec.get("use_ipv6", False)
             
-            if server_port:
+            if listen_port:
                 from app.utils import parse_address_port
                 try:
-                    if int(server_port) == 8000:
+                    if int(listen_port) == 8000:
                         db_tunnel.status = "error"
                         db_tunnel.error_message = "Chisel server cannot use port 8000 (panel API port). Use a different port."
                         await db.commit()
@@ -197,12 +198,12 @@ async def create_tunnel(tunnel: TunnelCreate, request: Request, db: AsyncSession
                 except (ValueError, TypeError):
                     pass
             
-            if server_port and hasattr(request.app.state, 'chisel_server_manager'):
+            if listen_port and hasattr(request.app.state, 'chisel_server_manager'):
                 try:
-                    logger.info(f"Starting Chisel server for tunnel {db_tunnel.id}: server_port={server_port}, auth={auth is not None}, fingerprint={fingerprint is not None}, use_ipv6={use_ipv6}")
+                    logger.info(f"Starting Chisel server for tunnel {db_tunnel.id}: listen_port={listen_port}, auth={auth is not None}, fingerprint={fingerprint is not None}, use_ipv6={use_ipv6}")
                     request.app.state.chisel_server_manager.start_server(
                         tunnel_id=db_tunnel.id,
-                        server_port=int(server_port),
+                        server_port=int(listen_port),
                         auth=auth,
                         fingerprint=fingerprint,
                         use_ipv6=bool(use_ipv6)
@@ -222,12 +223,12 @@ async def create_tunnel(tunnel: TunnelCreate, request: Request, db: AsyncSession
                     return db_tunnel
             else:
                 missing = []
-                if not server_port:
-                    missing.append("server_port")
+                if not listen_port:
+                    missing.append("listen_port")
                 if not hasattr(request.app.state, 'chisel_server_manager'):
                     missing.append("chisel_server_manager")
                 logger.warning(f"Tunnel {db_tunnel.id}: Missing required fields for Chisel server: {missing}")
-                if not server_port:
+                if not listen_port:
                     db_tunnel.status = "error"
                     db_tunnel.error_message = f"Missing required fields for Chisel: {missing}"
                     await db.commit()
@@ -243,11 +244,11 @@ async def create_tunnel(tunnel: TunnelCreate, request: Request, db: AsyncSession
             # Prepare spec for node (may need to modify for Chisel)
             spec_for_node = db_tunnel.spec.copy() if db_tunnel.spec else {}
             
-            # For Chisel, construct server_url from panel address and server_port
+            # For Chisel, construct server_url from panel address and listen_port
             if needs_chisel_server:
-                server_port = spec_for_node.get("server_port")
+                listen_port = spec_for_node.get("listen_port") or spec_for_node.get("remote_port") or spec_for_node.get("server_port")
                 use_ipv6 = spec_for_node.get("use_ipv6", False)
-                if server_port:
+                if listen_port:
                     # Get panel host from request
                     panel_host = request.url.hostname
                     if not panel_host:
@@ -262,15 +263,17 @@ async def create_tunnel(tunnel: TunnelCreate, request: Request, db: AsyncSession
                         # Use IPv6 format with brackets
                         formatted_host = format_address_port(panel_host, None)
                         if "[" in formatted_host:
-                            server_url = f"http://{formatted_host}:{server_port}"
+                            server_url = f"http://{formatted_host}:{listen_port}"
                         else:
                             # If host is not IPv6, use IPv6 localhost
-                            server_url = f"http://[::1]:{server_port}"
+                            server_url = f"http://[::1]:{listen_port}"
                     else:
-                        # Construct server_url: http://panel_host:server_port
-                        server_url = f"http://{panel_host}:{server_port}"
+                        # Construct server_url: http://panel_host:listen_port
+                        server_url = f"http://{panel_host}:{listen_port}"
                     spec_for_node["server_url"] = server_url
-                    logger.info(f"Chisel tunnel {db_tunnel.id}: server_url={server_url}, use_ipv6={use_ipv6}")
+                    # Set remote_port to listen_port for reverse tunnel (clients connect to this port)
+                    spec_for_node["remote_port"] = int(listen_port)
+                    logger.info(f"Chisel tunnel {db_tunnel.id}: server_url={server_url}, listen_port={listen_port}, use_ipv6={use_ipv6}")
             
             logger.info(f"Applying tunnel {db_tunnel.id} to node {node.id}")
             response = await client.send_to_node(
@@ -451,7 +454,7 @@ async def update_tunnel(
             needs_gost_forwarding = tunnel.type in ["tcp", "udp", "ws", "grpc", "tcpmux"] and tunnel.core == "xray"
             needs_rathole_server = tunnel.core == "rathole"
             needs_backhaul_server = tunnel.core == "backhaul"
-            needs_node_apply = tunnel.core in {"rathole", "backhaul"}
+            needs_node_apply = tunnel.core in {"rathole", "backhaul", "chisel"}
             
             if needs_gost_forwarding:
                 listen_port = tunnel.spec.get("listen_port")

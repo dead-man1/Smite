@@ -686,14 +686,15 @@ const AddTunnelModal = ({ nodes, onClose, onSuccess }: AddTunnelModalProps) => {
         spec.listen_port = port
       }
       
-      // For Chisel, add required fields
+      // For Chisel, add required fields (works like Rathole)
       if (formData.core === 'chisel') {
-        const serverPort = parseInt(formData.port.toString()) || 8080
-        spec.server_port = serverPort
+        // listen_port is where clients connect (like Rathole's proxy_port)
+        const listenPort = parseInt(formData.port.toString()) || 8080
+        spec.listen_port = listenPort
+        spec.remote_port = listenPort
+        spec.server_port = listenPort  // Keep for backward compatibility
         const localHost = formData.use_ipv6 ? '::1' : '127.0.0.1'
         spec.local_addr = `${localHost}:${formData.rathole_local_port || '8080'}`
-        spec.remote_port = serverPort
-        spec.listen_port = serverPort
       }
       
       if (formData.core === 'backhaul') {
