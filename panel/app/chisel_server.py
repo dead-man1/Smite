@@ -123,24 +123,45 @@ class ChiselServerManager:
                         del self.server_configs[tunnel_id]
                 raise RuntimeError(error_msg)
             
+            # Verify server is actually listening
             try:
                 import socket
-                # Check port based on IPv6 preference
-                if use_ipv6:
-                    sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
-                    sock.settimeout(1)
-                    result = sock.connect_ex(('::1', server_port))
+                max_retries = 3
+                port_listening = False
+                for attempt in range(max_retries):
+                    time.sleep(0.5)  # Give it time to bind
+                    if use_ipv6:
+                        sock = socket.socket(socket.AF_INET6, socket.SOCK_STREAM)
+                        sock.settimeout(1)
+                        result = sock.connect_ex(('::1', server_port))
+                    else:
+                        sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+                        sock.settimeout(1)
+                        result = sock.connect_ex(('127.0.0.1', server_port))
+                    sock.close()
+                    if result == 0:
+                        port_listening = True
+                        break
+                
+                if not port_listening:
+                    # Check if process is still running
+                    if proc.poll() is not None:
+                        error_msg = f"Chisel server process exited (code: {proc.poll()}) before port verification"
+                        logger.error(error_msg)
+                        raise RuntimeError(error_msg)
+                    else:
+                        logger.warning(f"Chisel server port {server_port} not listening after {max_retries} attempts, but process is running. PID: {proc.pid}")
                 else:
-                    sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-                    sock.settimeout(1)
-                    result = sock.connect_ex(('127.0.0.1', server_port))
-                sock.close()
-                if result != 0:
-                    logger.warning(f"Chisel server port {server_port} not listening after start, but process is running. PID: {proc.pid}")
+                    logger.info(f"Chisel server port {server_port} verified as listening")
             except Exception as e:
+                # Check if process died during verification
+                if proc.poll() is not None:
+                    error_msg = f"Chisel server process died during verification (code: {proc.poll()}): {e}"
+                    logger.error(error_msg)
+                    raise RuntimeError(error_msg)
                 logger.warning(f"Could not verify chisel server port is listening: {e}")
             
-            logger.info(f"Started Chisel server for tunnel {tunnel_id} on port {server_port}")
+            logger.info(f"Started Chisel server for tunnel {tunnel_id} on port {server_port} (PID: {proc.pid})")
             return True
             
         except Exception as e:

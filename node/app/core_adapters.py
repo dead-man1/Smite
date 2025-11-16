@@ -368,6 +368,7 @@ class ChiselAdapter:
         self.config_dir = Path("/etc/smite-node/chisel")
         self.config_dir.mkdir(parents=True, exist_ok=True)
         self.processes = {}
+        self.log_handles = {}  # Store log file handles to keep them open
     
     def _resolve_binary_path(self) -> Path:
         """Resolve chisel binary path"""
@@ -440,8 +441,12 @@ class ChiselAdapter:
         
         # Start chisel client process
         log_file = self.config_dir / f"{tunnel_id}.log"
+        log_f = open(log_file, 'w', buffering=1)
         try:
-            log_f = open(log_file, 'w', buffering=1)
+            log_f.write(f"Starting chisel client for tunnel {tunnel_id}\n")
+            log_f.write(f"Command: {' '.join(cmd)}\n")
+            log_f.write(f"server_url={server_url}, reverse_spec={reverse_spec}\n")
+            log_f.flush()
             proc = subprocess.Popen(
                 cmd,
                 stdout=log_f,
@@ -449,15 +454,25 @@ class ChiselAdapter:
                 cwd=str(self.config_dir),
                 start_new_session=True
             )
+            # Store log file handle to keep it open (prevents subprocess from exiting)
+            self.log_handles[tunnel_id] = log_f
             self.processes[tunnel_id] = proc
-            time.sleep(0.5)
+            time.sleep(1.0)  # Give it more time to start
             if proc.poll() is not None:
                 stderr = ""
                 if log_file.exists():
                     with open(log_file, 'r') as f:
                         stderr = f.read()
+                # Close log handle if process failed
+                if tunnel_id in self.log_handles:
+                    try:
+                        self.log_handles[tunnel_id].close()
+                    except:
+                        pass
+                    del self.log_handles[tunnel_id]
                 raise RuntimeError(f"chisel failed to start: {stderr[-500:] if len(stderr) > 500 else stderr}")
         except FileNotFoundError:
+            log_f.close()
             raise RuntimeError("chisel binary not found. Please install chisel.")
     
     def remove(self, tunnel_id: str):
@@ -469,9 +484,18 @@ class ChiselAdapter:
                 proc.wait(timeout=5)
             except subprocess.TimeoutExpired:
                 proc.kill()
+                proc.wait()
             except:
                 pass
             del self.processes[tunnel_id]
+        
+        # Close log file handle
+        if tunnel_id in self.log_handles:
+            try:
+                self.log_handles[tunnel_id].close()
+            except:
+                pass
+            del self.log_handles[tunnel_id]
         
         try:
             subprocess.run(["pkill", "-f", f"chisel.*{tunnel_id}"], check=False, timeout=3)
