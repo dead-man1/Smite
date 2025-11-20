@@ -47,7 +47,7 @@
 ### Quick Install
 
 ```bash
-sudo bash -c "$(curl -sL https://raw.githubusercontent.com/zZedix/Smite/master/scripts/install.sh)"
+sudo bash -c "$(curl -sL https://raw.githubusercontent.com/zZedix/Smite/main/scripts/install.sh)"
 ```
 
 ### Manual Install
@@ -91,7 +91,7 @@ smite admin create
 ### Quick Install
 
 ```bash
-sudo bash -c "$(curl -sL https://raw.githubusercontent.com/zZedix/Smite/master/scripts/smite-node.sh)"
+sudo bash -c "$(curl -sL https://raw.githubusercontent.com/zZedix/Smite/main/scripts/smite-node.sh)"
 ```
 
 The installer will prompt for:
@@ -133,21 +133,41 @@ docker compose up -d
 ## 🛠️ CLI Tools
 
 ### Panel CLI (`smite`)
+
+**Admin Management:**
 ```bash
 smite admin create      # Create admin user
 smite admin update      # Update admin password
+```
+
+**Panel Management:**
+```bash
 smite status            # Show system status
-smite update            # Update and restart
-smite restart           # Restart panel
-smite logs              # View logs
+smite update            # Update panel (pull images and recreate)
+smite restart           # Restart panel (recreate to pick up .env changes)
+smite logs              # View panel logs
+```
+
+**Configuration:**
+```bash
+smite edit              # Edit docker-compose.yml
+smite edit-env         # Edit .env file
 ```
 
 ### Node CLI (`smite-node`)
+
+**Node Management:**
 ```bash
 smite-node status       # Show node status
-smite-node update        # Update node
-smite-node restart      # Restart node
-smite-node logs         # View logs
+smite-node update       # Update node (pull images and recreate)
+smite-node restart      # Restart node (recreate to pick up .env changes)
+smite-node logs         # View node logs
+```
+
+**Configuration:**
+```bash
+smite-node edit         # Edit docker-compose.yml
+smite-node edit-env     # Edit .env file
 ```
 
 ---
