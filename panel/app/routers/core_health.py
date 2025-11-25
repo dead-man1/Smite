@@ -420,10 +420,13 @@ async def _reset_core(core: str, app_or_request, db: AsyncSession):
                         
                         spec_for_node = {
                             "server_url": server_url,
+                            "reverse_port": reverse_port,
+                            "remote_port": reverse_port,  # Also include as remote_port for compatibility
                             "reverse_spec": reverse_spec,
                             "auth": auth,
                             "fingerprint": fingerprint,
-                            "use_ipv6": use_ipv6
+                            "use_ipv6": use_ipv6,
+                            "local_addr": local_addr
                         }
                     else:
                         logger.warning(f"Chisel tunnel {tunnel.id}: Missing listen_port, skipping reset")
