@@ -1462,8 +1462,8 @@ const AddTunnelModal = ({ nodes, onClose, onSuccess }: AddTunnelModalProps) => {
             </>
           )}
           
-          {/* v4 to v6 tunnel checkbox - only for Rathole, Backhaul, Chisel (not GOST) */}
-          {formData.core !== 'xray' && formData.core !== 'frp' && (
+          {/* v4 to v6 tunnel checkbox - only for Rathole, Backhaul, Chisel, FRP (not GOST) */}
+          {formData.core !== 'xray' && (
             <>
               <div className="flex items-center gap-2">
                 <input

@@ -60,17 +60,23 @@ class FrpServerManager:
                 logger.warning(f"FRP server for tunnel {tunnel_id} already exists, stopping it first")
                 self.stop_server(tunnel_id)
             
-            # Create config file
-            config_file = self.config_dir / f"frps_{tunnel_id}.toml"
+            # Create config file - Use YAML format as TOML seems to have issues with FRP v0.65.0
+            config_file = self.config_dir / f"frps_{tunnel_id}.yaml"
+            config_content = f"""bindPort: {bind_port}
+"""
+            if token:
+                config_content += f"""auth:
+  method: token
+  token: "{token}"
+"""
+            config_content += """webServer:
+  enable: false
+"""
             with open(config_file, 'w') as f:
-                f.write("[common]\n")
-                f.write(f"bindPort = {bind_port}\n")
-                if token:
-                    f.write('auth.method = "token"\n')
-                    f.write(f'auth.token = "{token}"\n')
-                # Disable dashboard
-                f.write("\n[webServer]\n")
-                f.write("enable = false\n")
+                f.write(config_content)
+            
+            # Log config content for debugging
+            logger.info(f"FRP server config file {config_file} content:\n{config_content}")
             
             binary_path = self._resolve_binary_path()
             cmd = [
@@ -208,6 +214,14 @@ class FrpServerManager:
                 except:
                     pass
             del self.server_configs[tunnel_id]
+        
+        # Also clean up old TOML config files if they exist
+        old_toml_config = self.config_dir / f"frps_{tunnel_id}.toml"
+        if old_toml_config.exists():
+            try:
+                old_toml_config.unlink()
+            except:
+                pass
     
     def is_running(self, tunnel_id: str) -> bool:
         """Check if server is running for a tunnel"""
