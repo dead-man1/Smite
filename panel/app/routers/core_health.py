@@ -250,16 +250,18 @@ async def manual_reset_core(core: str, request: Request, db: AsyncSession = Depe
         raise HTTPException(status_code=400, detail=f"Invalid core: {core}")
     
     try:
-        await _reset_core(core, request, db)
-        
         result = await db.execute(select(CoreResetConfig).where(CoreResetConfig.core == core))
         config = result.scalar_one_or_none()
         
+        reset_time = datetime.utcnow()
+        
         if config:
-            config.last_reset = datetime.utcnow()
+            config.last_reset = reset_time
             if config.enabled and config.interval_minutes:
-                config.next_reset = config.last_reset + timedelta(minutes=config.interval_minutes)
+                config.next_reset = reset_time + timedelta(minutes=config.interval_minutes)
             await db.commit()
+        
+        await _reset_core(core, request, db)
         
         return {"status": "success", "message": f"{core} reset successfully"}
     except Exception as e:

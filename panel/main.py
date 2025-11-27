@@ -435,11 +435,12 @@ async def _auto_reset_scheduler(app: FastAPI):
                     if now >= config.next_reset:
                         try:
                             logger.info(f"Auto-resetting {config.core} core (interval: {config.interval_minutes} minutes)")
-                            await _reset_core(config.core, app, db)
                             
                             config.last_reset = now
                             config.next_reset = now + timedelta(minutes=config.interval_minutes)
                             await db.commit()
+                            
+                            await _reset_core(config.core, app, db)
                             
                             logger.info(f"Auto-reset completed for {config.core}, next reset at {config.next_reset}")
                         except Exception as e:
