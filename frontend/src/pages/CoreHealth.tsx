@@ -28,6 +28,8 @@ const CoreHealth = () => {
   const [loading, setLoading] = useState(true)
   const [updating, setUpdating] = useState<string | null>(null)
   const [timerTick, setTimerTick] = useState(0)
+  // Store client-side reset times (independent of server time)
+  const [clientResetTimes, setClientResetTimes] = useState<Record<string, number>>({})
 
   const fetchData = async () => {
     try {
@@ -74,43 +76,25 @@ const CoreHealth = () => {
     return () => clearInterval(timerInterval)
   }, [])
 
-  // Debug: Log configs changes
-  useEffect(() => {
-    const frpConfig = configs.find(c => c.core === 'frp')
-    if (frpConfig) {
-      console.log('FRP config last_reset:', frpConfig.last_reset, 'Type:', typeof frpConfig.last_reset)
-    }
-  }, [configs])
 
   const handleReset = async (core: string) => {
     if (!confirm(`Are you sure you want to reset ${core} core?`)) return
     
     setUpdating(core)
+    
+    // Store client-side reset time immediately (independent of server)
+    const clientResetTime = Date.now()
+    setClientResetTimes(prev => ({
+      ...prev,
+      [core]: clientResetTime
+    }))
+    
+    // Force timer update immediately
+    setTimerTick(prev => prev + 1)
+    
     try {
-      const response = await api.post(`/core-health/reset/${core}`)
-      
-      // Immediately update the config with the new timestamp from response
-      if (response.data?.last_reset) {
-        const newTimestamp = response.data.last_reset
-        console.log(`Reset ${core}: New timestamp =`, newTimestamp, 'Type:', typeof newTimestamp)
-        
-        // Update state immediately - this is the source of truth
-        setConfigs(prevConfigs => {
-          const updated = prevConfigs.map(config => 
-            config.core === core 
-              ? { ...config, last_reset: newTimestamp }
-              : config
-          )
-          console.log(`Updated configs for ${core}:`, updated.find(c => c.core === core))
-          return updated
-        })
-        
-        // Force timer update immediately
-        setTimerTick(prev => prev + 1)
-      }
-      
-      // DO NOT call fetchData() - it will overwrite our update with potentially stale data
-      // The regular 10-second interval will sync it up later
+      await api.post(`/core-health/reset/${core}`)
+      // Don't wait for or use server response for timer - we use client time
     } catch (error) {
       console.error(`Failed to reset ${core}:`, error)
       alert(`Failed to reset ${core}`)
@@ -156,21 +140,44 @@ const CoreHealth = () => {
     }
   }
 
-  const formatTimeAgo = (dateStr: string | null) => {
-    if (!dateStr) return "Never"
+  const formatTimeAgo = (core: string, clientResetTime: number | undefined, serverTimestamp: string | null) => {
+    // Use client-side reset time if available (preferred - independent of server time)
+    if (clientResetTime) {
+      const now = Date.now()
+      const diffMs = now - clientResetTime
+      
+      if (diffMs < 0) return "Just now"
+      
+      const diffSecs = Math.floor(diffMs / 1000)
+      const diffMins = Math.floor(diffMs / 60000)
+      
+      if (diffSecs < 10) return "Just now"
+      if (diffSecs < 60) return `${diffSecs} seconds ago`
+      if (diffMins < 1) return "Just now"
+      if (diffMins === 1) return "1 minute ago"
+      if (diffMins < 60) return `${diffMins} minutes ago`
+      
+      const diffHours = Math.floor(diffMins / 60)
+      if (diffHours === 1) return "1 hour ago"
+      if (diffHours < 24) return `${diffHours} hours ago`
+      
+      const diffDays = Math.floor(diffHours / 24)
+      if (diffDays === 1) return "1 day ago"
+      return `${diffDays} days ago`
+    }
+    
+    // Fallback to server timestamp if no client reset time (e.g., on page load)
+    if (!serverTimestamp) return "Never"
     
     try {
-      const date = new Date(dateStr)
-      // Check if date is valid
+      const date = new Date(serverTimestamp)
       if (isNaN(date.getTime())) {
-        console.error("Invalid date string:", dateStr)
-        return "Invalid date"
+        return "Never"
       }
       
-      const now = new Date()
-      const diffMs = now.getTime() - date.getTime()
+      const now = Date.now()
+      const diffMs = now - date.getTime()
       
-      // If negative, it's in the future (shouldn't happen, but handle it)
       if (diffMs < 0) return "Just now"
       
       const diffSecs = Math.floor(diffMs / 1000)
@@ -190,8 +197,7 @@ const CoreHealth = () => {
       if (diffDays === 1) return "1 day ago"
       return `${diffDays} days ago`
     } catch (error) {
-      console.error("Error formatting time:", error, dateStr)
-      return "Error"
+      return "Never"
     }
   }
 
@@ -333,7 +339,9 @@ const CoreHealth = () => {
                       />
                     </div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">
-                      <div key={`${config.last_reset}-${timerTick}`}>Last reset: {formatTimeAgo(config.last_reset)}</div>
+                      <div key={`${coreHealth.core}-${timerTick}`}>
+                        Last reset: {formatTimeAgo(coreHealth.core, clientResetTimes[coreHealth.core], config.last_reset)}
+                      </div>
                     </div>
                   </div>
                 )}
