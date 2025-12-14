@@ -83,7 +83,8 @@ class Hysteria2Client:
             "metadata": {
                 "api_address": f"http://{node_ip}:{settings.node_api_port}",
                 "node_name": settings.node_name,
-                "panel_address": self.panel_address
+                "panel_address": self.panel_address,
+                "role": settings.node_role  # "iran" or "foreign"
             }
         }
         

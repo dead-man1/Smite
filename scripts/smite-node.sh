@@ -82,6 +82,22 @@ NODE_API_PORT=${NODE_API_PORT:-8888}
 read -p "Node name (default: node-1): " NODE_NAME
 NODE_NAME=${NODE_NAME:-node-1}
 
+echo ""
+echo "=== Server Role ==="
+echo "Select server role:"
+echo "1) Iran Server (runs tunnel clients, connects to foreign servers)"
+echo "2) Foreign Server (runs tunnel servers, accepts connections from Iran servers)"
+read -p "Enter choice [1 or 2] (default: 1): " ROLE_CHOICE
+ROLE_CHOICE=${ROLE_CHOICE:-1}
+
+if [ "$ROLE_CHOICE" = "2" ]; then
+    NODE_ROLE="foreign"
+    echo "✅ Selected: Foreign Server"
+else
+    NODE_ROLE="iran"
+    echo "✅ Selected: Iran Server"
+fi
+
 # Save CA certificate
 mkdir -p certs
 echo -e "$PANEL_CA_CONTENT" > certs/ca.crt
@@ -95,6 +111,7 @@ echo "✅ CA certificate saved to certs/ca.crt"
 cat > .env << EOF
 NODE_API_PORT=$NODE_API_PORT
 NODE_NAME=$NODE_NAME
+NODE_ROLE=$NODE_ROLE
 SMITE_VERSION=${SMITE_VERSION:-latest}
 
 PANEL_CA_PATH=/etc/smite-node/certs/ca.crt

@@ -79,54 +79,95 @@ class RatholeAdapter:
         self.processes = {}
     
     def apply(self, tunnel_id: str, spec: Dict[str, Any]):
-        """Apply Rathole tunnel"""
+        """Apply Rathole tunnel - supports both server and client modes"""
         if tunnel_id in self.processes:
             logger.info(f"Rathole tunnel {tunnel_id} already exists, removing it first")
             self.remove(tunnel_id)
         
-        remote_addr = spec.get('remote_addr', '').strip()
-        token = spec.get('token', '').strip()
-        local_addr = spec.get('local_addr', '127.0.0.1:8080')
+        mode = spec.get('mode', 'client')  # Default to client for backward compatibility
         
-        if not remote_addr:
-            raise ValueError("Rathole requires 'remote_addr' (panel address) in spec")
-        if not token:
-            raise ValueError("Rathole requires 'token' in spec")
-        
-        config = f"""[client]
+        if mode == 'server':
+            # Server mode: foreign node runs rathole server
+            bind_addr = spec.get('bind_addr', '0.0.0.0:23333')
+            token = spec.get('token', '').strip()
+            proxy_port = spec.get('proxy_port') or spec.get('remote_port') or spec.get('listen_port')
+            
+            if not token:
+                raise ValueError("Rathole server requires 'token' in spec")
+            if not proxy_port:
+                raise ValueError("Rathole server requires 'proxy_port' or 'remote_port' in spec")
+            
+            # Parse bind_addr to get host and port
+            bind_host, bind_port, is_ipv6 = parse_address_port(bind_addr)
+            if not bind_port:
+                bind_host = "0.0.0.0"
+                bind_port = 23333
+            
+            config = f"""[server]
+bind_addr = "{bind_host}:{bind_port}"
+default_token = "{token}"
+
+[server.services.{tunnel_id}]
+bind_addr = "0.0.0.0:{proxy_port}"
+"""
+            
+            config_path = self.config_dir / f"{tunnel_id}.toml"
+            with open(config_path, "w") as f:
+                f.write(config)
+            
+            try:
+                proc = subprocess.Popen(
+                    ["/usr/local/bin/rathole", "-s", str(config_path)],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                )
+            except FileNotFoundError:
+                proc = subprocess.Popen(
+                    ["rathole", "-s", str(config_path)],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                )
+        else:
+            # Client mode: iran node runs rathole client
+            remote_addr = spec.get('remote_addr', '').strip()
+            token = spec.get('token', '').strip()
+            local_addr = spec.get('local_addr', '127.0.0.1:8080')
+            
+            if not remote_addr:
+                raise ValueError("Rathole client requires 'remote_addr' (foreign server address) in spec")
+            if not token:
+                raise ValueError("Rathole client requires 'token' in spec")
+            
+            config = f"""[client]
 remote_addr = "{remote_addr}"
 default_token = "{token}"
 
 [client.services.{tunnel_id}]
 local_addr = "{local_addr}"
 """
+            
+            config_path = self.config_dir / f"{tunnel_id}.toml"
+            with open(config_path, "w") as f:
+                f.write(config)
+            
+            try:
+                proc = subprocess.Popen(
+                    ["/usr/local/bin/rathole", "-c", str(config_path)],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                )
+            except FileNotFoundError:
+                proc = subprocess.Popen(
+                    ["rathole", "-c", str(config_path)],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE
+                )
         
-        config_path = self.config_dir / f"{tunnel_id}.toml"
-        with open(config_path, "w") as f:
-            f.write(config)
-        
-        try:
-            proc = subprocess.Popen(
-                ["/usr/local/bin/rathole", "-c", str(config_path)],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
-            )
-            self.processes[tunnel_id] = proc
-            time.sleep(0.5)
-            if proc.poll() is not None:
-                stderr = proc.stderr.read().decode() if proc.stderr else "Unknown error"
-                raise RuntimeError(f"rathole failed to start: {stderr}")
-        except FileNotFoundError:
-            proc = subprocess.Popen(
-                ["rathole", "-c", str(config_path)],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE
-            )
-            self.processes[tunnel_id] = proc
-            time.sleep(0.5)
-            if proc.poll() is not None:
-                stderr = proc.stderr.read().decode() if proc.stderr else "Unknown error"
-                raise RuntimeError(f"rathole failed to start: {stderr}")
+        self.processes[tunnel_id] = proc
+        time.sleep(0.5)
+        if proc.poll() is not None:
+            stderr = proc.stderr.read().decode() if proc.stderr else "Unknown error"
+            raise RuntimeError(f"rathole failed to start: {stderr}")
     
     def remove(self, tunnel_id: str):
         """Remove Rathole tunnel"""

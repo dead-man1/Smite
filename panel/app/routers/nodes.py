@@ -49,6 +49,11 @@ async def create_node(node: NodeCreate, db: AsyncSession = Depends(get_db)):
     metadata["api_address"] = f"http://{node.ip_address}:{node.api_port}"
     metadata["ip_address"] = node.ip_address
     metadata["api_port"] = node.api_port
+    # Preserve role if provided, default to "iran" for backward compatibility
+    if "role" not in metadata and "role" in node.metadata:
+        metadata["role"] = node.metadata.get("role", "iran")
+    elif "role" not in metadata:
+        metadata["role"] = "iran"  # Default to iran for backward compatibility
     
     if existing:
         existing.last_seen = datetime.utcnow()
