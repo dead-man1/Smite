@@ -501,61 +501,63 @@ async def create_tunnel(tunnel: TunnelCreate, request: Request, db: AsyncSession
             pass
         
         if needs_node_apply and not is_reverse_tunnel:
-            remote_addr = db_tunnel.spec.get("remote_addr")
-            token = db_tunnel.spec.get("token")
-            proxy_port = db_tunnel.spec.get("remote_port") or db_tunnel.spec.get("listen_port")
-            use_ipv6 = db_tunnel.spec.get("use_ipv6", False)
-            
-            if remote_addr:
-                from app.utils import parse_address_port
-                _, rathole_port, _ = parse_address_port(remote_addr)
-                try:
-                    if rathole_port and int(rathole_port) == 8000:
+            # Rathole panel-server logic applies only to rathole core
+            if db_tunnel.core == "rathole":
+                remote_addr = db_tunnel.spec.get("remote_addr")
+                token = db_tunnel.spec.get("token")
+                proxy_port = db_tunnel.spec.get("remote_port") or db_tunnel.spec.get("listen_port")
+                use_ipv6 = db_tunnel.spec.get("use_ipv6", False)
+                
+                if remote_addr:
+                    from app.utils import parse_address_port
+                    _, rathole_port, _ = parse_address_port(remote_addr)
+                    try:
+                        if rathole_port and int(rathole_port) == 8000:
+                            db_tunnel.status = "error"
+                            db_tunnel.error_message = "Rathole server cannot use port 8000 (panel API port). Use a different port like 23333."
+                            await db.commit()
+                            await db.refresh(db_tunnel)
+                            return db_tunnel
+                    except (ValueError, TypeError):
+                        pass
+                
+                if remote_addr and token and proxy_port and hasattr(request.app.state, 'rathole_server_manager'):
+                    try:
+                        logger.info(f"Starting Rathole server for tunnel {db_tunnel.id}: remote_addr={remote_addr}, token={token}, proxy_port={proxy_port}, use_ipv6={use_ipv6}")
+                        request.app.state.rathole_server_manager.start_server(
+                            tunnel_id=db_tunnel.id,
+                            remote_addr=remote_addr,
+                            token=token,
+                            proxy_port=int(proxy_port),
+                            use_ipv6=bool(use_ipv6)
+                        )
+                        logger.info(f"Successfully started Rathole server for tunnel {db_tunnel.id}")
+                        rathole_started = True
+                    except Exception as e:
+                        error_msg = str(e)
+                        logger.error(f"Failed to start Rathole server for tunnel {db_tunnel.id}: {error_msg}", exc_info=True)
                         db_tunnel.status = "error"
-                        db_tunnel.error_message = "Rathole server cannot use port 8000 (panel API port). Use a different port like 23333."
+                        db_tunnel.error_message = f"Rathole server error: {error_msg}"
                         await db.commit()
                         await db.refresh(db_tunnel)
                         return db_tunnel
-                except (ValueError, TypeError):
-                    pass
-            
-            if remote_addr and token and proxy_port and hasattr(request.app.state, 'rathole_server_manager'):
-                try:
-                    logger.info(f"Starting Rathole server for tunnel {db_tunnel.id}: remote_addr={remote_addr}, token={token}, proxy_port={proxy_port}, use_ipv6={use_ipv6}")
-                    request.app.state.rathole_server_manager.start_server(
-                        tunnel_id=db_tunnel.id,
-                        remote_addr=remote_addr,
-                        token=token,
-                        proxy_port=int(proxy_port),
-                        use_ipv6=bool(use_ipv6)
-                    )
-                    logger.info(f"Successfully started Rathole server for tunnel {db_tunnel.id}")
-                    rathole_started = True
-                except Exception as e:
-                    error_msg = str(e)
-                    logger.error(f"Failed to start Rathole server for tunnel {db_tunnel.id}: {error_msg}", exc_info=True)
-                    db_tunnel.status = "error"
-                    db_tunnel.error_message = f"Rathole server error: {error_msg}"
-                    await db.commit()
-                    await db.refresh(db_tunnel)
-                    return db_tunnel
-            else:
-                missing = []
-                if not remote_addr:
-                    missing.append("remote_addr")
-                if not token:
-                    missing.append("token")
-                if not proxy_port:
-                    missing.append("proxy_port")
-                if not hasattr(request.app.state, 'rathole_server_manager'):
-                    missing.append("rathole_server_manager")
-                logger.warning(f"Tunnel {db_tunnel.id}: Missing required fields for Rathole server: {missing}")
-                if not remote_addr or not token or not proxy_port:
-                    db_tunnel.status = "error"
-                    db_tunnel.error_message = f"Missing required fields for Rathole: {missing}"
-                    await db.commit()
-                    await db.refresh(db_tunnel)
-                    return db_tunnel
+                else:
+                    missing = []
+                    if not remote_addr:
+                        missing.append("remote_addr")
+                    if not token:
+                        missing.append("token")
+                    if not proxy_port:
+                        missing.append("proxy_port")
+                    if not hasattr(request.app.state, 'rathole_server_manager'):
+                        missing.append("rathole_server_manager")
+                    logger.warning(f"Tunnel {db_tunnel.id}: Missing required fields for Rathole server: {missing}")
+                    if not remote_addr or not token or not proxy_port:
+                        db_tunnel.status = "error"
+                        db_tunnel.error_message = f"Missing required fields for Rathole: {missing}"
+                        await db.commit()
+                        await db.refresh(db_tunnel)
+                        return db_tunnel
         
         if needs_chisel_server:
             listen_port = db_tunnel.spec.get("listen_port") or db_tunnel.spec.get("remote_port") or db_tunnel.spec.get("server_port")
