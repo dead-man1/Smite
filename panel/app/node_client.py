@@ -9,8 +9,8 @@ from app.database import AsyncSessionLocal
 from app.models import Node
 
 
-class Hysteria2Client:
-    """Client to send requests to nodes via HTTPS (mTLS)"""
+class NodeClient:
+    """Client to send requests to nodes via HTTP/HTTPS"""
     
     def __init__(self):
         self.timeout = httpx.Timeout(30.0)

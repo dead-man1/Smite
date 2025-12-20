@@ -1,4 +1,4 @@
-"""Hysteria2 client for node to connect to panel"""
+"""Panel client for node to connect to panel"""
 import asyncio
 import httpx
 import hashlib
@@ -11,8 +11,8 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
-class Hysteria2Client:
-    """Client connecting to panel via HTTPS"""
+class PanelClient:
+    """Client connecting to panel via HTTP/HTTPS"""
     
     def __init__(self):
         self.panel_address = settings.panel_address

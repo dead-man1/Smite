@@ -1,4 +1,4 @@
-"""Hysteria2 server for panel-node communication"""
+"""Node server for panel-node communication"""
 import asyncio
 import ssl
 import logging
@@ -9,28 +9,28 @@ from app.config import settings
 logger = logging.getLogger(__name__)
 
 
-class Hysteria2Server:
-    """Hysteria2 server with mTLS for secure panel-node communication"""
+class NodeServer:
+    """Node server for secure panel-node communication"""
     
     def __init__(self):
-        self.port = settings.hysteria2_port
-        self.cert_path = settings.hysteria2_cert_path
-        self.key_path = settings.hysteria2_key_path
+        self.port = settings.node_port
+        self.cert_path = settings.node_cert_path
+        self.key_path = settings.node_key_path
         self.server: Optional[asyncio.Server] = None
         self.clients = {}
     
     async def start(self):
-        """Start Hysteria2 server"""
+        """Start Node server"""
         cert_path = Path(self.cert_path)
         key_path = Path(self.key_path)
         
         if not cert_path.exists() or not key_path.exists():
             await self._generate_certs()
         
-        logger.info(f"Hysteria2 server starting on port {self.port}")
+        logger.info(f"Node server starting on port {self.port}")
     
     async def stop(self):
-        """Stop Hysteria2 server"""
+        """Stop Node server"""
         if self.server:
             self.server.close()
             await self.server.wait_closed()

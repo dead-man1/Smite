@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Copy, Trash2, CheckCircle, XCircle, Download } from 'lucide-react'
+import { Plus, Copy, Trash2, CheckCircle, XCircle, Download, AlertCircle } from 'lucide-react'
 import api from '../api/client'
 
 interface Node {
@@ -190,20 +190,55 @@ const Nodes = () => {
                   </div>
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap">
-                  <span
-                    className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${
-                      node.status === 'active'
-                        ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200'
-                        : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
-                    }`}
-                  >
-                    {node.status === 'active' ? (
-                      <CheckCircle size={12} />
-                    ) : (
-                      <XCircle size={12} />
-                    )}
-                    {node.status}
-                  </span>
+                  {(() => {
+                    const connStatus = node.metadata?.connection_status || 'failed'
+                    const getStatusColor = (status: string) => {
+                      switch (status) {
+                        case 'connected':
+                          return 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200'
+                        case 'connecting':
+                        case 'reconnecting':
+                          return 'bg-yellow-100 dark:bg-yellow-900/30 text-yellow-800 dark:text-yellow-200'
+                        case 'failed':
+                          return 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200'
+                        default:
+                          return 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
+                      }
+                    }
+                    const getStatusIcon = (status: string) => {
+                      switch (status) {
+                        case 'connected':
+                          return <CheckCircle size={12} className="text-green-600 dark:text-green-400" />
+                        case 'connecting':
+                        case 'reconnecting':
+                          return <AlertCircle size={12} className="text-yellow-600 dark:text-yellow-400" />
+                        case 'failed':
+                          return <XCircle size={12} className="text-red-600 dark:text-red-400" />
+                        default:
+                          return <XCircle size={12} />
+                      }
+                    }
+                    const getStatusText = (status: string) => {
+                      switch (status) {
+                        case 'connected':
+                          return 'Connected'
+                        case 'connecting':
+                          return 'Connecting'
+                        case 'reconnecting':
+                          return 'Reconnecting'
+                        case 'failed':
+                          return 'Failed'
+                        default:
+                          return status
+                      }
+                    }
+                    return (
+                      <span className={`inline-flex items-center gap-1 px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(connStatus)}`}>
+                        {getStatusIcon(connStatus)}
+                        {getStatusText(connStatus)}
+                      </span>
+                    )
+                  })()}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
                   {new Date(node.last_seen).toLocaleString()}

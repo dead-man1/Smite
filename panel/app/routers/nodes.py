@@ -5,9 +5,11 @@ from sqlalchemy import select
 from typing import List
 from datetime import datetime
 from pydantic import BaseModel
+import httpx
 
 from app.database import get_db
 from app.models import Node
+from app.node_client import NodeClient
 
 
 router = APIRouter()
@@ -50,7 +52,6 @@ async def create_node(node: NodeCreate, db: AsyncSession = Depends(get_db)):
     metadata["ip_address"] = node.ip_address
     metadata["api_port"] = node.api_port
     
-    # Validate and set role
     incoming_role = node.metadata.get("role", "iran") if node.metadata else "iran"
     if incoming_role not in ["iran", "foreign"]:
         raise HTTPException(
@@ -60,7 +61,6 @@ async def create_node(node: NodeCreate, db: AsyncSession = Depends(get_db)):
     metadata["role"] = incoming_role
     
     if existing:
-        # Check if existing node has a different role - this prevents conflicts
         existing_role = existing.node_metadata.get("role", "iran") if existing.node_metadata else "iran"
         if existing_role != incoming_role:
             raise HTTPException(
@@ -72,9 +72,7 @@ async def create_node(node: NodeCreate, db: AsyncSession = Depends(get_db)):
         
         existing.last_seen = datetime.utcnow()
         existing.status = "active"
-        # Update metadata but preserve role consistency
         existing.node_metadata.update(metadata)
-        # Ensure role is preserved
         existing.node_metadata["role"] = existing_role
         await db.commit()
         await db.refresh(existing)
@@ -110,21 +108,46 @@ async def create_node(node: NodeCreate, db: AsyncSession = Depends(get_db)):
 
 @router.get("", response_model=List[NodeResponse])
 async def list_nodes(db: AsyncSession = Depends(get_db)):
-    """List all nodes"""
+    """List all nodes with connection state"""
     result = await db.execute(select(Node))
     nodes = result.scalars().all()
-    return [
-        NodeResponse(
-            id=n.id,
-            name=n.name,
-            fingerprint=n.fingerprint,
-            status=n.status,
-            registered_at=n.registered_at,
-            last_seen=n.last_seen,
-            metadata=n.node_metadata or {}
-        )
-        for n in nodes
-    ]
+    
+    client = NodeClient()
+    node_responses = []
+    
+    for node in nodes:
+        connection_status = "failed"
+        try:
+            response = await client.get_tunnel_status(node.id, "")
+            if response and response.get("status") == "ok":
+                connection_status = "connected"
+            else:
+                error_msg = response.get("message", "Node disconnected") if response else "Node not responding"
+                if "timeout" in error_msg.lower() or "connection" in error_msg.lower():
+                    connection_status = "reconnecting"
+                else:
+                    connection_status = "failed"
+        except httpx.ConnectError:
+            connection_status = "connecting"
+        except httpx.TimeoutException:
+            connection_status = "reconnecting"
+        except Exception:
+            connection_status = "failed"
+        
+        metadata = node.node_metadata.copy() if node.node_metadata else {}
+        metadata["connection_status"] = connection_status
+        
+        node_responses.append(NodeResponse(
+            id=node.id,
+            name=node.name,
+            fingerprint=node.fingerprint,
+            status=node.status,
+            registered_at=node.registered_at,
+            last_seen=node.last_seen,
+            metadata=metadata
+        ))
+    
+    return node_responses
 
 
 @router.get("/{node_id}", response_model=NodeResponse)

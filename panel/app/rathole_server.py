@@ -34,7 +34,6 @@ class RatholeServerManager:
             True if server started successfully, False otherwise
         """
         try:
-            # Parse remote_addr to extract port and IPv6 info (handles IPv4, IPv6, and hostnames)
             _, port, _ = parse_address_port(remote_addr)
             if port is None:
                 raise ValueError(f"Invalid remote_addr format: {remote_addr} (port required)")
@@ -123,10 +122,8 @@ bind_addr = "{proxy_bind_addr}"
             
             try:
                 import socket
-                # Extract port from bind_addr
                 _, port, _ = parse_address_port(bind_addr)
                 if port:
-                    # Always check IPv4 since panel listens on 0.0.0.0
                     sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                     sock.settimeout(1)
                     result = sock.connect_ex(('127.0.0.1', port))

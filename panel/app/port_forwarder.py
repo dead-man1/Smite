@@ -55,7 +55,6 @@ class PortForwarder:
     async def _forward_loop(self, local_port: int, node_address: str, remote_port: int):
         """Main forwarding loop - accepts connections and forwards them"""
         try:
-            # Parse node address
             if "://" in node_address:
                 node_address = node_address.split("://")[-1]
             node_host = node_address.split(":")[0] if ":" in node_address else node_address
@@ -189,6 +188,5 @@ class PortForwarder:
             await self.stop_forward(port)
 
 
-# Global forwarder instance
 port_forwarder = PortForwarder()
 

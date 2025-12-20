@@ -20,12 +20,11 @@ class Settings(BaseSettings):
     db_user: str = "smite"
     db_password: str = "changeme"
     
-    hysteria2_port: int = 4443
-    hysteria2_cert_path: str = "./certs/ca.crt"
-    hysteria2_key_path: str = "./certs/ca.key"
-    # Separate CA cert for foreign servers
-    hysteria2_server_cert_path: str = "./certs/ca-server.crt"
-    hysteria2_server_key_path: str = "./certs/ca-server.key"
+    node_port: int = 4443
+    node_cert_path: str = "./certs/ca.crt"
+    node_key_path: str = "./certs/ca.key"
+    node_server_cert_path: str = "./certs/ca-server.crt"
+    node_server_key_path: str = "./certs/ca-server.key"
     
     secret_key: str = "changeme-secret-key-change-in-production"
     

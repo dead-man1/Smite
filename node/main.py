@@ -10,7 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import settings
 from app.routers import agent
-from app.hysteria2_client import Hysteria2Client
+from app.panel_client import PanelClient
 from app.core_adapters import AdapterManager
 
 logging.basicConfig(
@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
-    h2_client = Hysteria2Client()
+    h2_client = PanelClient()
     try:
         await h2_client.start()
         app.state.h2_client = h2_client
@@ -34,7 +34,7 @@ async def lifespan(app: FastAPI):
             logger.warning(f"Could not register with panel: {e}")
             logger.warning("Node will continue running but manual registration may be needed")
     except Exception as e:
-        logger.error(f"Failed to start Hysteria2 client: {e}")
+        logger.error(f"Failed to start Panel client: {e}")
         logger.error("Node API will still be available, but panel connection will not work")
         logger.error("Make sure CA certificate is available at the configured path")
         app.state.h2_client = None

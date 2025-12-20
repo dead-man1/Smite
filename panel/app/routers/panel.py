@@ -12,10 +12,10 @@ logger = logging.getLogger(__name__)
 @router.get("/ca")
 async def get_ca_cert(download: bool = False):
     """Get CA certificate for Iran node enrollment"""
-    from app.hysteria2_server import Hysteria2Server
+    from app.node_server import NodeServer
     import os
     
-    cert_path_str = settings.hysteria2_cert_path
+    cert_path_str = settings.node_cert_path
     cert_path = Path(cert_path_str)
     
     if not cert_path.is_absolute():
@@ -39,7 +39,7 @@ async def get_ca_cert(download: bool = False):
             pass
     
     if needs_generation:
-        h2_server = Hysteria2Server()
+        h2_server = NodeServer()
         h2_server.cert_path = str(cert_path)
         h2_server.key_path = str(cert_path.parent / "ca.key")
         await h2_server._generate_certs()
@@ -71,10 +71,10 @@ async def get_ca_cert(download: bool = False):
 @router.get("/ca/server")
 async def get_server_ca_cert(download: bool = False):
     """Get CA certificate for foreign server enrollment"""
-    from app.hysteria2_server import Hysteria2Server
+    from app.node_server import NodeServer
     import os
     
-    cert_path_str = settings.hysteria2_server_cert_path
+    cert_path_str = settings.node_server_cert_path
     cert_path = Path(cert_path_str)
     
     if not cert_path.is_absolute():
@@ -98,10 +98,9 @@ async def get_server_ca_cert(download: bool = False):
             pass
     
     if needs_generation:
-        h2_server = Hysteria2Server()
+        h2_server = NodeServer()
         h2_server.cert_path = str(cert_path)
         h2_server.key_path = str(cert_path.parent / "ca-server.key")
-        # Generate with different CN to distinguish from node CA
         await h2_server._generate_certs(common_name="Smite Server CA")
         logger.info(f"Server certificate generated at {cert_path}")
     

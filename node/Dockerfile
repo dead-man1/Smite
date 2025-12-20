@@ -111,6 +111,7 @@ ENV SMITE_VERSION="${SMITE_VERSION}"
 
 # Copy binaries from binary stages
 COPY --from=rathole-bin /usr/local/bin/rathole /usr/local/bin/rathole
+COPY --from=rathole-bin /usr/local/bin/gost /usr/local/bin/gost
 COPY --from=rathole-bin /usr/local/bin/chisel /usr/local/bin/chisel
 COPY --from=rathole-bin /usr/local/bin/frpc /usr/local/bin/frpc
 COPY --from=rathole-bin /usr/local/bin/frps /usr/local/bin/frps

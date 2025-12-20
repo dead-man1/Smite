@@ -7,7 +7,7 @@
     <img src="assets/SmiteL.png" alt="Smite Logo" width="200"/>
   </picture>
   
-  **Modern tunnel management built on GOST, Backhaul, Rathole, Chisel, and FRP, featuring an intuitive WebUI, fast CLI, and open-source freedom.**
+  **Modern tunnel management built on GOST, Backhaul, Rathole, Chisel, and FRP, featuring dual-node architecture, intuitive WebUI, real-time status tracking, and open-source freedom.**
   
   [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
   [![Python](https://img.shields.io/badge/Python-3.11+-blue.svg)](https://www.python.org/)
@@ -23,12 +23,14 @@
 
 ## 🚀 Features
 
-- **Multiple Tunnel Types**: Support for TCP, UDP, gRPC, TCPMux, Backhaul, Rathole, Chisel, and FRP
+- **Multiple Tunnel Types**: Support for TCP, UDP, WebSocket, gRPC, TCPMux via GOST, Backhaul, Rathole, Chisel, and FRP
+- **Dual-Node Architecture**: Iran nodes act as servers, Foreign servers act as clients for reverse tunnels
 - **Docker-First**: Easy deployment with Docker Compose
-- **Web UI**: Modern, intuitive web interface for tunnel management
+- **Web UI**: Modern, intuitive web interface with real-time connection status tracking
 - **CLI Tools**: Powerful command-line tools for management
 - **Node Support**: Easy reverse tunnel setup with Backhaul, Rathole, Chisel, and FRP nodes
-- **GOST Forwarding**: Direct forwarding without nodes for better performance
+- **GOST Forwarding**: Forward traffic from Iran nodes to Foreign servers with support for TCP, UDP, WebSocket, gRPC, and TCPMux
+- **Connection Status**: Real-time monitoring of node and server connection states (connecting, connected, reconnecting, failed)
 
 ---
 
@@ -82,11 +84,24 @@ smite admin create
 
 6. Access the web interface at `http://localhost:8000`
 
+### CA Certificates
+
+The panel generates two separate CA certificates:
+- **`ca.crt`** / **`ca.key`**: Used for Iran nodes
+- **`ca-server.crt`** / **`ca-server.key`**: Used for Foreign servers
+
+Both certificates are available in the panel's `certs/` directory and can be downloaded from the Servers page in the web UI.
+
 ---
 
 ## 🖥️ Node Installation
 
-> **Note**: Nodes are used for **Backhaul**, **Rathole**, **Chisel**, and **FRP** tunnels, providing easy reverse tunnel functionality. For GOST tunnels (TCP, UDP, gRPC, TCPMux), you can forward directly without a node.
+> **Note**: Nodes are used for **Backhaul**, **Rathole**, **Chisel**, and **FRP** tunnels, providing easy reverse tunnel functionality. For GOST tunnels (TCP, UDP, WebSocket, gRPC, TCPMux), GOST runs on Iran nodes and forwards traffic to Foreign servers.
+
+### Architecture
+
+- **Iran Nodes**: Act as servers in reverse tunnels (Rathole, Backhaul, Chisel, FRP) and run GOST forwarders
+- **Foreign Servers**: Act as clients in reverse tunnels and receive forwarded traffic from Iran nodes
 
 ### Quick Install
 
@@ -95,10 +110,11 @@ sudo bash -c "$(curl -sL https://raw.githubusercontent.com/zZedix/Smite/main/scr
 ```
 
 The installer will prompt for:
-- Panel CA certificate path
+- Panel CA certificate path (use `ca.crt` for Iran nodes, `ca-server.crt` for Foreign servers)
 - Panel address (host:port)
 - Node API port (default: 8888)
 - Node name (default: node-1)
+- Node role (iran or foreign)
 
 ### Manual Install
 
@@ -110,7 +126,10 @@ cd node
 2. Copy Panel CA certificate:
 ```bash
 mkdir -p certs
+# For Iran nodes, use ca.crt
 cp /path/to/panel/ca.crt certs/ca.crt
+# For Foreign servers, use ca-server.crt
+# cp /path/to/panel/ca-server.crt certs/ca.crt
 ```
 
 3. Create `.env` file:
@@ -122,6 +141,8 @@ PANEL_CA_PATH=/etc/smite-node/certs/ca.crt
 PANEL_ADDRESS=panel.example.com:443
 EOF
 ```
+
+> **Note**: The panel validates node roles during registration. Each node must have a consistent role (iran or foreign) to prevent conflicts.
 
 4. Start node:
 ```bash
@@ -174,29 +195,34 @@ smite-node edit-env     # Edit .env file
 
 ## 📖 Tunnel Types
 
-### GOST Tunnels (Direct Forwarding)
+### GOST Tunnels (Iran Node Forwarding)
 - **TCP**: Simple TCP forwarding
 - **UDP**: UDP packet forwarding
+- **WebSocket (WS)**: WebSocket protocol forwarding
 - **gRPC**: gRPC protocol forwarding
 - **TCPMux**: TCP multiplexing for multiple connections
 
-These tunnels work directly without requiring a node - they forward traffic from the panel to the target server.
+GOST tunnels run on Iran nodes and forward traffic to Foreign servers. When creating a GOST tunnel, specify both an Iran node and a Foreign server. The Iran node will listen on the specified port and forward all traffic to the Foreign server's IP address and port.
 
 ### Backhaul Tunnels (Reverse Tunnel)
 - **TCP / UDP**: Low-latency reverse tunnels with optional UDP-over-TCP
 - **WS / WSMux**: WebSocket transports for CDN-friendly deployments
+- **TCPMux**: TCP multiplexing support
 - **Advanced Controls**: Configure multiplexing, keepalive, sniffer, and custom port maps per tunnel
 
-Backhaul tunnels require a node. The panel manages the Backhaul server automatically and the node applies the matching client configuration.
+Backhaul tunnels use a dual-node architecture: Iran nodes run the Backhaul server, and Foreign servers run the Backhaul client. The panel automatically configures both nodes when creating a tunnel.
 
 ### Rathole Tunnels (Reverse Tunnel)
-Rathole tunnels require a node and provide easy reverse tunnel functionality. The node connects to the panel, allowing you to expose services running on the node's network through the panel.
+- **TCP**: Standard TCP reverse tunnel
+- **WebSocket (WS)**: WebSocket transport support
+
+Rathole tunnels use a dual-node architecture: Iran nodes run the Rathole server, and Foreign servers run the Rathole client. The node connects to the panel, allowing you to expose services running on the Foreign server's network through the Iran node.
 
 ### Chisel Tunnels (Reverse Tunnel)
-Chisel tunnels require a node and provide fast TCP/UDP reverse tunnel functionality. Similar to Rathole, the node connects to the panel's Chisel server, enabling you to expose services running on the node's network through the panel with high performance.
+Chisel tunnels use a dual-node architecture: Iran nodes run the Chisel server, and Foreign servers run the Chisel client. They provide fast TCP/UDP reverse tunnel functionality, enabling you to expose services running on the Foreign server's network through the Iran node with high performance.
 
 ### FRP Tunnels (Reverse Tunnel)
-FRP (Fast Reverse Proxy) tunnels require a node and provide reliable TCP/UDP reverse tunnel functionality. The panel manages the FRP server automatically, and the node runs the FRP client to establish the reverse tunnel connection. FRP supports both TCP and UDP protocols, with optional IPv6 support for tunneling IPv6 traffic over IPv4 networks.
+FRP (Fast Reverse Proxy) tunnels use a dual-node architecture: Iran nodes run the FRP server (frps), and Foreign servers run the FRP client (frpc). They provide reliable TCP/UDP reverse tunnel functionality. FRP supports both TCP and UDP protocols, with optional IPv6 support for tunneling IPv6 traffic over IPv4 networks.
 
 ---
 

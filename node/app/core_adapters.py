@@ -48,7 +48,6 @@ def parse_address_port(address_str: str):
                 except ValueError:
                     return (address_str, None, False)
     
-    # No port specified
     return (address_str, None, False)
 
 
@@ -84,15 +83,13 @@ class RatholeAdapter:
             logger.info(f"Rathole tunnel {tunnel_id} already exists, removing it first")
             self.remove(tunnel_id)
         
-        mode = spec.get('mode', 'client')  # Default to client for backward compatibility
+        mode = spec.get('mode', 'client')
         
-        # Get transport type (tcp or websocket)
         transport = (spec.get('transport') or spec.get('type') or 'tcp').lower()
         use_websocket = transport == 'websocket' or transport == 'ws'
         websocket_tls = spec.get('websocket_tls', False) or spec.get('tls', False)
         
         if mode == 'server':
-            # Server mode: foreign node runs rathole server
             bind_addr = spec.get('bind_addr', '0.0.0.0:23333')
             token = spec.get('token', '').strip()
             proxy_port = spec.get('proxy_port') or spec.get('remote_port') or spec.get('listen_port')
@@ -102,7 +99,6 @@ class RatholeAdapter:
             if not proxy_port:
                 raise ValueError("Rathole server requires 'proxy_port' or 'remote_port' in spec")
             
-            # Parse bind_addr to get host and port
             bind_host, bind_port, is_ipv6 = parse_address_port(bind_addr)
             if not bind_port:
                 bind_host = "0.0.0.0"
@@ -145,7 +141,6 @@ bind_addr = "0.0.0.0:{proxy_port}"
                     stderr=subprocess.PIPE
                 )
         else:
-            # Client mode: iran node runs rathole client
             remote_addr = spec.get('remote_addr', '').strip()
             token = spec.get('token', '').strip()
             local_addr = spec.get('local_addr', '127.0.0.1:8080')
@@ -155,8 +150,6 @@ bind_addr = "0.0.0.0:{proxy_port}"
             if not token:
                 raise ValueError("Rathole client requires 'token' in spec")
             
-            # For WebSocket, remote_addr might have ws:// or wss:// prefix
-            # Remove it as Rathole expects just host:port
             if remote_addr.startswith('ws://'):
                 remote_addr = remote_addr[5:]
             elif remote_addr.startswith('wss://'):
@@ -301,10 +294,9 @@ class BackhaulAdapter:
             logger.info(f"Backhaul tunnel {tunnel_id} already exists, removing it first")
             self.remove(tunnel_id)
         
-        mode = spec.get('mode', 'client')  # Default to client for backward compatibility
+        mode = spec.get('mode', 'client')
         
         if mode == 'server':
-            # Server mode: foreign node runs backhaul server
             transport = (spec.get("transport") or spec.get("type") or "tcp").lower()
             if transport not in {"tcp", "udp", "ws", "wsmux", "tcpmux"}:
                 raise ValueError(f"Unsupported Backhaul transport '{transport}'")
@@ -316,7 +308,6 @@ class BackhaulAdapter:
                 bind_ip = spec.get("bind_ip", "0.0.0.0")
                 bind_addr = f"{bind_ip}:{control_port}"
             
-            # Build ports configuration
             ports = spec.get("ports")
             if not ports:
                 listen_port = spec.get("public_port") or spec.get("listen_port")
@@ -343,7 +334,6 @@ class BackhaulAdapter:
             if token:
                 server_config["token"] = token
             
-            # Add server options
             SERVER_OPTION_KEYS = [
                 "nodelay", "keepalive_period", "channel_size", "log_level",
                 "heartbeat", "mux_con", "accept_udp", "skip_optz",
@@ -376,7 +366,6 @@ class BackhaulAdapter:
                 log_fh.close()
                 raise
         else:
-            # Client mode: iran node runs backhaul client
             remote_addr = spec.get("remote_addr") or spec.get("control_addr") or spec.get("bind_addr")
             if not remote_addr:
                 raise ValueError("Backhaul client requires 'remote_addr' in spec")
@@ -530,18 +519,16 @@ class ChiselAdapter:
         self.config_dir = Path("/etc/smite-node/chisel")
         self.config_dir.mkdir(parents=True, exist_ok=True)
         self.processes = {}
-        self.log_handles = {}  # Store log file handles to keep them open
+        self.log_handles = {}
     
     def _resolve_binary_path(self) -> Path:
         """Resolve chisel binary path"""
-        # Check environment variable first
         env_path = os.environ.get("CHISEL_BINARY")
         if env_path:
             resolved = Path(env_path)
             if resolved.exists() and resolved.is_file():
                 return resolved
         
-        # Check common locations
         common_paths = [
             Path("/usr/local/bin/chisel"),
             Path("/usr/bin/chisel"),
@@ -552,7 +539,6 @@ class ChiselAdapter:
             if path.exists() and path.is_file():
                 return path
         
-        # Check PATH
         resolved = shutil.which("chisel")
         if resolved:
             return Path(resolved)
@@ -563,15 +549,13 @@ class ChiselAdapter:
     
     def apply(self, tunnel_id: str, spec: Dict[str, Any]):
         """Apply Chisel tunnel - supports both server and client modes"""
-        # Remove existing tunnel if it exists
         if tunnel_id in self.processes:
             logger.info(f"Chisel tunnel {tunnel_id} already exists, removing it first")
             self.remove(tunnel_id)
         
-        mode = spec.get('mode', 'client')  # Default to client for backward compatibility
+        mode = spec.get('mode', 'client')
         
         if mode == 'server':
-            # Server mode: foreign node runs chisel server
             server_port = spec.get('server_port') or spec.get('control_port') or spec.get('listen_port')
             if not server_port:
                 raise ValueError("Chisel server requires 'server_port' or 'control_port' in spec")
@@ -590,12 +574,10 @@ class ChiselAdapter:
                 "--reverse"
             ]
             
-            # Optional: Add authentication
             auth = spec.get('auth')
             if auth:
                 cmd.extend(["--auth", auth])
             
-            # Optional: Add fingerprint
             fingerprint = spec.get('fingerprint')
             if fingerprint:
                 cmd.extend(["--fingerprint", fingerprint])
@@ -618,7 +600,6 @@ class ChiselAdapter:
                 log_f.close()
                 raise RuntimeError("chisel binary not found. Please install chisel.")
         else:
-            # Client mode: iran node runs chisel client
             server_url = spec.get('server_url', '').strip()
             reverse_port = spec.get('reverse_port') or spec.get('remote_port') or spec.get('listen_port') or spec.get('server_port')
             local_addr = spec.get('local_addr')
@@ -650,17 +631,14 @@ class ChiselAdapter:
                 reverse_spec
             ]
             
-            # Optional: Add authentication if provided
             auth = spec.get('auth')
             if auth:
                 cmd.extend(["--auth", auth])
             
-            # Optional: Add fingerprint if provided
             fingerprint = spec.get('fingerprint')
             if fingerprint:
                 cmd.extend(["--fingerprint", fingerprint])
             
-            # Start chisel client process
             log_file = self.config_dir / f"{tunnel_id}.log"
             log_f = open(log_file, 'w', buffering=1)
             try:
@@ -687,7 +665,6 @@ class ChiselAdapter:
             if log_file.exists():
                 with open(log_file, 'r') as f:
                     stderr = f.read()
-            # Close log handle if process failed
             if tunnel_id in self.log_handles:
                 try:
                     self.log_handles[tunnel_id].close()
@@ -710,7 +687,6 @@ class ChiselAdapter:
                 pass
             del self.processes[tunnel_id]
         
-        # Close log file handle
         if tunnel_id in self.log_handles:
             try:
                 self.log_handles[tunnel_id].close()
@@ -779,10 +755,9 @@ class FrpAdapter:
             logger.info(f"FRP tunnel {tunnel_id} already exists, removing it first")
             self.remove(tunnel_id)
         
-        mode = spec.get('mode', 'client')  # Default to client for backward compatibility
+        mode = spec.get('mode', 'client')
         
         if mode == 'server':
-            # Server mode: foreign node runs frps
             bind_port = spec.get('bind_port', 7000)
             token = spec.get('token')
             
@@ -800,7 +775,6 @@ class FrpAdapter:
             
             logger.info(f"FRP server tunnel {tunnel_id}: bind_port={bind_port}, token={'set' if token else 'none'}")
             
-            # Resolve frps binary path
             env_path = os.environ.get("FRPS_BINARY")
             if env_path:
                 binary_path = Path(env_path)
@@ -845,8 +819,6 @@ class FrpAdapter:
                 log_f.close()
                 raise RuntimeError("FRP server binary (frps) not found. Please install FRP.")
         else:
-            # Client mode: iran node runs frpc
-            # Log the full spec for debugging
             logger.info(f"FRP tunnel {tunnel_id} received spec: {spec}")
             
             server_addr = spec.get('server_addr', '').strip()
@@ -868,15 +840,12 @@ class FrpAdapter:
             if tunnel_type not in ['tcp', 'udp']:
                 raise ValueError(f"FRP only supports 'tcp' and 'udp' types, got '{tunnel_type}'")
             
-            # Clean server_addr - remove brackets if present (for IPv6 format)
             if server_addr.startswith('[') and server_addr.endswith(']'):
                 server_addr = server_addr[1:-1]
             
-            # Validate server_addr is not 0.0.0.0 or empty
             if not server_addr or server_addr in ["0.0.0.0", "localhost", "127.0.0.1", "::1"]:
                 raise ValueError(f"Invalid FRP server_addr: {server_addr}. Must be a valid foreign server IP address or hostname.")
             
-            # Create FRP client config file
             config_file = self.config_dir / f"frpc_{tunnel_id}.yaml"
             config_content = f"""serverAddr: "{server_addr}"
 serverPort: {server_port}
@@ -965,7 +934,6 @@ proxies:
                 pass
             del self.log_handles[tunnel_id]
         
-        # Clean up config file
         config_file = self.config_dir / f"frpc_{tunnel_id}.yaml"
         if config_file.exists():
             try:
@@ -993,6 +961,185 @@ proxies:
         }
 
 
+class GostAdapter:
+    """GOST forwarding adapter - forwards from Iran node to Foreign server"""
+    name = "gost"
+    
+    def __init__(self):
+        self.config_dir = Path("/etc/smite-node/gost")
+        self.config_dir.mkdir(parents=True, exist_ok=True)
+        self.processes = {}
+        self.log_handles = {}
+    
+    def _resolve_binary_path(self) -> Path:
+        """Resolve gost binary path"""
+        env_path = os.environ.get("GOST_BINARY")
+        if env_path:
+            resolved = Path(env_path)
+            if resolved.exists() and resolved.is_file():
+                return resolved
+        
+        common_paths = [
+            Path("/usr/local/bin/gost"),
+            Path("/usr/bin/gost"),
+        ]
+        
+        for path in common_paths:
+            if path.exists() and path.is_file():
+                return path
+        
+        resolved = shutil.which("gost")
+        if resolved:
+            return Path(resolved)
+        
+        raise FileNotFoundError(
+            "GOST binary not found. Expected at GOST_BINARY, '/usr/local/bin/gost', or in PATH."
+        )
+    
+    def apply(self, tunnel_id: str, spec: Dict[str, Any]):
+        """Apply GOST forwarding - Iran node forwards to Foreign server"""
+        if tunnel_id in self.processes:
+            logger.info(f"GOST tunnel {tunnel_id} already exists, removing it first")
+            self.remove(tunnel_id)
+        
+        listen_port = spec.get('listen_port') or spec.get('remote_port')
+        forward_to = spec.get('forward_to')
+        
+        if not forward_to:
+            remote_ip = spec.get('remote_ip', '127.0.0.1')
+            remote_port = spec.get('remote_port', 8080)
+            forward_to = f"{remote_ip}:{remote_port}"
+        
+        if not listen_port:
+            raise ValueError("GOST requires 'listen_port' or 'remote_port' in spec")
+        if not forward_to:
+            raise ValueError("GOST requires 'forward_to' or ('remote_ip' and 'remote_port') in spec")
+        
+        tunnel_type = spec.get('type', 'tcp').lower()
+        use_ipv6 = spec.get('use_ipv6', False)
+        
+        forward_host, forward_port, forward_is_ipv6 = parse_address_port(forward_to)
+        if forward_port is None:
+            forward_port = 8080
+        
+        if forward_is_ipv6:
+            target_addr = f"[{forward_host}]:{forward_port}"
+        else:
+            target_addr = f"{forward_host}:{forward_port}"
+        
+        if use_ipv6:
+            listen_addr = f"[::]:{listen_port}"
+        else:
+            listen_addr = f"0.0.0.0:{listen_port}"
+        
+        binary_path = self._resolve_binary_path()
+        
+        if tunnel_type == "tcp":
+            cmd = [str(binary_path), f"-L=tcp://{listen_addr}/{target_addr}"]
+        elif tunnel_type == "udp":
+            cmd = [str(binary_path), f"-L=udp://{listen_addr}/{target_addr}"]
+        elif tunnel_type == "ws":
+            import socket
+            try:
+                if use_ipv6:
+                    s = socket.socket(socket.AF_INET6, socket.SOCK_DGRAM)
+                    s.connect(("2001:4860:4860::8888", 80))
+                    bind_ip = s.getsockname()[0]
+                else:
+                    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    s.connect(("8.8.8.8", 80))
+                    bind_ip = s.getsockname()[0]
+                s.close()
+            except Exception:
+                bind_ip = "[::]" if use_ipv6 else "0.0.0.0"
+            cmd = [str(binary_path), f"-L=ws://{bind_ip}:{listen_port}/tcp://{target_addr}"]
+        elif tunnel_type == "grpc":
+            cmd = [str(binary_path), f"-L=grpc://{listen_addr}/{target_addr}"]
+        elif tunnel_type == "tcpmux":
+            cmd = [str(binary_path), f"-L=tcpmux://{listen_addr}/{target_addr}"]
+        else:
+            raise ValueError(f"Unsupported GOST tunnel type: {tunnel_type}")
+        
+        log_file = self.config_dir / f"{tunnel_id}.log"
+        log_f = open(log_file, 'w', buffering=1)
+        try:
+            log_f.write(f"Starting GOST forwarding for tunnel {tunnel_id}\n")
+            log_f.write(f"Command: {' '.join(cmd)}\n")
+            log_f.write(f"Forwarding: {tunnel_type}://{listen_addr} -> {target_addr}\n")
+            log_f.flush()
+            
+            proc = subprocess.Popen(
+                cmd,
+                stdout=log_f,
+                stderr=subprocess.STDOUT,
+                cwd=str(self.config_dir),
+                start_new_session=True,
+                close_fds=False
+            )
+        except Exception as e:
+            log_f.close()
+            raise RuntimeError(f"Failed to start GOST: {e}")
+        
+        self.log_handles[tunnel_id] = log_f
+        self.processes[tunnel_id] = proc
+        
+        time.sleep(1.5)
+        if proc.poll() is not None:
+            stderr = ""
+            if log_file.exists():
+                with open(log_file, 'r') as f:
+                    stderr = f.read()
+            if tunnel_id in self.log_handles:
+                try:
+                    self.log_handles[tunnel_id].close()
+                except:
+                    pass
+                del self.log_handles[tunnel_id]
+            raise RuntimeError(f"GOST failed to start: {stderr[-500:] if len(stderr) > 500 else stderr}")
+        
+        logger.info(f"GOST forwarding started for tunnel {tunnel_id}: {tunnel_type}://{listen_addr} -> {target_addr}")
+    
+    def remove(self, tunnel_id: str):
+        """Remove GOST tunnel"""
+        if tunnel_id in self.processes:
+            proc = self.processes[tunnel_id]
+            try:
+                proc.terminate()
+                proc.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                proc.kill()
+                proc.wait()
+            except:
+                pass
+            del self.processes[tunnel_id]
+        
+        if tunnel_id in self.log_handles:
+            try:
+                self.log_handles[tunnel_id].close()
+            except:
+                pass
+            del self.log_handles[tunnel_id]
+        
+        try:
+            subprocess.run(["pkill", "-f", f"gost.*{tunnel_id}"], check=False, timeout=3, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+        except:
+            pass
+    
+    def status(self, tunnel_id: str) -> Dict[str, Any]:
+        """Get status"""
+        is_running = False
+        
+        if tunnel_id in self.processes:
+            proc = self.processes[tunnel_id]
+            is_running = proc.poll() is None
+        
+        return {
+            "active": is_running,
+            "type": "gost",
+            "process_running": is_running
+        }
+
+
 class AdapterManager:
     """Manager for core adapters"""
     
@@ -1002,6 +1149,7 @@ class AdapterManager:
             "backhaul": BackhaulAdapter(),
             "chisel": ChiselAdapter(),
             "frp": FrpAdapter(),
+            "gost": GostAdapter(),
         }
         self.active_tunnels: Dict[str, CoreAdapter] = {}
     
@@ -1015,7 +1163,6 @@ class AdapterManager:
         logger = logging.getLogger(__name__)
         logger.info(f"Applying tunnel {tunnel_id}: core={tunnel_core}")
         
-        # Remove existing tunnel if it exists
         if tunnel_id in self.active_tunnels:
             logger.info(f"Tunnel {tunnel_id} already exists, removing it first")
             await self.remove_tunnel(tunnel_id)

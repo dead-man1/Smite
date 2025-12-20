@@ -7,10 +7,11 @@ from datetime import datetime, timedelta
 from pydantic import BaseModel
 import logging
 import asyncio
+import httpx
 
 from app.database import get_db
 from app.models import Tunnel, Node, CoreResetConfig
-from app.hysteria2_client import Hysteria2Client
+from app.node_client import NodeClient
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -20,10 +21,8 @@ CORES = ["backhaul", "rathole", "chisel", "frp"]
 
 class CoreHealthResponse(BaseModel):
     core: str
-    panel_status: str
-    panel_healthy: bool
-    panel_error_message: str | None = None
-    nodes_status: Dict[str, Dict[str, Any]]
+    nodes_status: Dict[str, Dict[str, Any]]  # Iran nodes
+    servers_status: Dict[str, Dict[str, Any]]  # Foreign servers
 
 
 class ResetConfigResponse(BaseModel):
@@ -45,123 +44,72 @@ async def get_core_health(request: Request, db: AsyncSession = Depends(get_db)):
     health_data = []
     
     for core in CORES:
-        panel_status = "unknown"
-        panel_healthy = False
-        nodes_status = {}
-        
         result = await db.execute(select(Tunnel).where(Tunnel.core == core, Tunnel.status == "active"))
         active_tunnels = result.scalars().all()
         
-        try:
-            if core == "backhaul":
-                manager = getattr(request.app.state, "backhaul_manager", None)
-                if manager:
-                    active_servers = manager.get_active_servers()
-                    if len(active_tunnels) > 0:
-                        panel_healthy = len(active_servers) > 0
-                        panel_status = "healthy" if panel_healthy else "error"
-                    else:
-                        panel_healthy = True  # No tunnels means healthy (nothing to check)
-                        panel_status = "healthy"
-                else:
-                    panel_healthy = len(active_tunnels) == 0
-                    panel_status = "error" if len(active_tunnels) > 0 else "healthy"
-            elif core == "rathole":
-                manager = getattr(request.app.state, "rathole_server_manager", None)
-                if manager:
-                    if len(active_tunnels) > 0:
-                        tunnel_ids = {t.id for t in active_tunnels}
-                        all_healthy = True
-                        error_message = None
-                        for tunnel_id in tunnel_ids:
-                            if not manager.is_running(tunnel_id):
-                                all_healthy = False
-                                error_message = f"Server for tunnel {tunnel_id[:8]}... not running"
-                                break
-                        panel_healthy = all_healthy
-                        panel_status = "healthy" if panel_healthy else "error"
-                        if not panel_healthy and error_message:
-                            panel_status = f"error: {error_message}"
-                    else:
-                        panel_healthy = True  # No tunnels means healthy (nothing to check)
-                        panel_status = "healthy"
-                else:
-                    panel_healthy = len(active_tunnels) == 0
-                    panel_status = "error" if len(active_tunnels) > 0 else "healthy"
-            elif core == "chisel":
-                manager = getattr(request.app.state, "chisel_server_manager", None)
-                if manager:
-                    active_servers = manager.get_active_servers()
-                    if len(active_tunnels) > 0:
-                        panel_healthy = len(active_servers) > 0
-                        panel_status = "healthy" if panel_healthy else "error"
-                    else:
-                        panel_healthy = True  # No tunnels means healthy (nothing to check)
-                        panel_status = "healthy"
-                else:
-                    panel_healthy = len(active_tunnels) == 0
-                    panel_status = "error" if len(active_tunnels) > 0 else "healthy"
-            elif core == "frp":
-                manager = getattr(request.app.state, "frp_server_manager", None)
-                if manager:
-                    active_servers = manager.get_active_servers()
-                    if len(active_tunnels) > 0:
-                        panel_healthy = len(active_servers) > 0
-                        panel_status = "healthy" if panel_healthy else "error"
-                    else:
-                        panel_healthy = True  # No tunnels means healthy (nothing to check)
-                        panel_status = "healthy"
-                else:
-                    panel_healthy = len(active_tunnels) == 0
-                    panel_status = "error" if len(active_tunnels) > 0 else "healthy"
-        except Exception as e:
-            logger.error(f"Error checking {core} panel health: {e}")
-            panel_status = "error"
-            panel_healthy = False
-        
         node_ids = set(t.node_id for t in active_tunnels if t.node_id)
         
-        client = Hysteria2Client()
-        for node_id in node_ids:
-            node_result = await db.execute(select(Node).where(Node.id == node_id))
-            node = node_result.scalar_one_or_none()
-            if not node:
-                continue
+        for tunnel in active_tunnels:
+            if tunnel.spec and tunnel.spec.get("foreign_node_id"):
+                node_ids.add(tunnel.spec.get("foreign_node_id"))
+        
+        if node_ids:
+            result = await db.execute(select(Node).where(Node.id.in_(node_ids)))
+            nodes_to_check = result.scalars().all()
+        else:
+            nodes_to_check = []
+        
+        iran_nodes = {}
+        foreign_nodes = {}
+        
+        client = NodeClient()
+        for node in nodes_to_check:
+            node_role = node.node_metadata.get("role", "iran") if node.node_metadata else "iran"
+            node_id = node.id
             
-            node_status = {
-                "healthy": False,
-                "status": "unknown",
+            connection_status = {
+                "status": "failed",
                 "error_message": None
             }
             
             try:
                 response = await client.get_tunnel_status(node_id, "")
                 if response and response.get("status") == "ok":
-                    node_status["healthy"] = True
-                    node_status["status"] = "healthy"
+                    connection_status["status"] = "connected"
                 else:
                     error_msg = response.get("message", "Node disconnected") if response else "Node not responding"
-                    node_status["status"] = "error"
-                    node_status["error_message"] = error_msg
+                    if "timeout" in error_msg.lower() or "connection" in error_msg.lower():
+                        connection_status["status"] = "reconnecting"
+                    else:
+                        connection_status["status"] = "failed"
+                    connection_status["error_message"] = error_msg
+            except httpx.ConnectError:
+                connection_status["status"] = "connecting"
+                connection_status["error_message"] = "Connecting to node..."
+            except httpx.TimeoutException:
+                connection_status["status"] = "reconnecting"
+                connection_status["error_message"] = "Connection timeout"
             except Exception as e:
                 logger.error(f"Error checking {core} node {node_id} health: {e}")
-                node_status["status"] = "error"
-                node_status["error_message"] = str(e)
+                connection_status["status"] = "failed"
+                connection_status["error_message"] = str(e)
             
-            nodes_status[node_id] = node_status
-        
-        # Extract error message from panel_status if it contains error details
-        panel_error_message = None
-        if panel_status.startswith("error:"):
-            panel_error_message = panel_status.split("error:", 1)[1].strip()
-            panel_status = "error"
+            node_info = {
+                "id": node_id,
+                "name": node.name,
+                "role": node_role,
+                **connection_status
+            }
+            
+            if node_role == "iran":
+                iran_nodes[node_id] = node_info
+            else:
+                foreign_nodes[node_id] = node_info
         
         health_data.append(CoreHealthResponse(
             core=core,
-            panel_status=panel_status,
-            panel_healthy=panel_healthy,
-            panel_error_message=panel_error_message,
-            nodes_status=nodes_status
+            nodes_status=iran_nodes,
+            servers_status=foreign_nodes
         ))
     
     return health_data
@@ -222,20 +170,16 @@ async def update_reset_config(
             raise HTTPException(status_code=400, detail="Interval must be at least 1 minute")
         config.interval_minutes = config_update.interval_minutes
     
-    if config.enabled and config.interval_minutes:
-        now = datetime.utcnow()
-        if config.last_reset:
-            # Calculate next_reset from last_reset, but ensure it's not in the past
-            calculated_next = config.last_reset + timedelta(minutes=config.interval_minutes)
-            if calculated_next > now:
-                # If calculated time is in the future, use it
-                config.next_reset = calculated_next
+        if config.enabled and config.interval_minutes:
+            now = datetime.utcnow()
+            if config.last_reset:
+                calculated_next = config.last_reset + timedelta(minutes=config.interval_minutes)
+                if calculated_next > now:
+                    config.next_reset = calculated_next
+                else:
+                    config.next_reset = now + timedelta(minutes=config.interval_minutes)
             else:
-                # If calculated time is in the past (e.g., old last_reset), reset from now
                 config.next_reset = now + timedelta(minutes=config.interval_minutes)
-        else:
-            # No last_reset, start timer from now
-            config.next_reset = now + timedelta(minutes=config.interval_minutes)
     else:
         config.next_reset = None
     
@@ -296,15 +240,10 @@ async def _reset_core(core: str, app_or_request, db: AsyncSession):
     result = await db.execute(select(Tunnel).where(Tunnel.core == core, Tunnel.status == "active"))
     active_tunnels = result.scalars().all()
     
-    # Servers now run on foreign nodes, not on panel - skip panel-side server restart
-    # Panel-side managers are disabled but kept for backward compatibility
+    client = NodeClient()
     
-    client = Hysteria2Client()
-    
-    # For each tunnel, find both foreign and iran nodes and restart appropriately
     for tunnel in active_tunnels:
         try:
-            # Find iran node from tunnel.node_id
             iran_node = None
             foreign_node = None
             
@@ -315,14 +254,12 @@ async def _reset_core(core: str, app_or_request, db: AsyncSession):
                     foreign_node = iran_node
                     iran_node = None
             
-            # Find foreign node if not found
             if not foreign_node:
                 result = await db.execute(select(Node).where(Node.node_metadata["role"].astext == "foreign"))
                 foreign_nodes = result.scalars().all()
                 if foreign_nodes:
                     foreign_node = foreign_nodes[0]
             
-            # Find iran node if not found
             if not iran_node:
                 if tunnel.node_id:
                     result = await db.execute(select(Node).where(Node.id == tunnel.node_id))
@@ -337,14 +274,12 @@ async def _reset_core(core: str, app_or_request, db: AsyncSession):
                 logger.warning(f"Tunnel {tunnel.id}: Missing foreign or iran node, skipping reset")
                 continue
             
-            # Prepare server config for iran node and client config for foreign node (Iran = SERVER, Foreign = CLIENT)
             server_spec = tunnel.spec.copy() if tunnel.spec else {}
             server_spec["mode"] = "server"
             
             client_spec = tunnel.spec.copy() if tunnel.spec else {}
             client_spec["mode"] = "client"
             
-            # Prepare configs based on tunnel type (same logic as create_tunnel)
             if core == "rathole":
                 transport = server_spec.get("transport") or server_spec.get("type") or "tcp"
                 proxy_port = server_spec.get("remote_port") or server_spec.get("listen_port")
@@ -485,7 +420,6 @@ async def _reset_core(core: str, app_or_request, db: AsyncSession):
                 if token:
                     client_spec["token"] = token
             
-            # Apply server config to iran node (Iran = SERVER)
             if not iran_node.node_metadata.get("api_address"):
                 iran_node.node_metadata["api_address"] = f"http://{iran_node.node_metadata.get('ip_address', iran_node.fingerprint)}:{iran_node.node_metadata.get('api_port', 8888)}"
                 await db.commit()
@@ -507,7 +441,6 @@ async def _reset_core(core: str, app_or_request, db: AsyncSession):
                 logger.error(f"Failed to restart tunnel {tunnel.id} on iran node {iran_node.id}: {error_msg}")
                 continue
             
-            # Apply client config to foreign node (Foreign = CLIENT)
             if not foreign_node.node_metadata.get("api_address"):
                 foreign_node.node_metadata["api_address"] = f"http://{foreign_node.node_metadata.get('ip_address', foreign_node.fingerprint)}:{foreign_node.node_metadata.get('api_port', 8888)}"
                 await db.commit()

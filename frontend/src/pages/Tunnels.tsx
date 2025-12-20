@@ -251,163 +251,109 @@ const Tunnels = () => {
         </button>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-        {tunnels.map((tunnel) => (
-          <div
-            key={tunnel.id}
-            className="bg-white dark:bg-gray-800 rounded-xl shadow-sm border border-gray-200 dark:border-gray-700 p-5 sm:p-6 transition-all hover:shadow-md"
-          >
-            {/* Header */}
-            <div className="flex justify-between items-start mb-4">
-              <div className="flex-1">
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white mb-1">{tunnel.name}</h3>
-                <p className="text-sm text-gray-500 dark:text-gray-400">
-                  {tunnel.core === 'xray' ? 'gost' : tunnel.core} / {tunnel.type}
-                </p>
-                {tunnel.node_id && (
-                  <p className="text-xs text-gray-400 dark:text-gray-500 mt-1">
-                    Node: {nodes.find(n => n.id === tunnel.node_id)?.name || tunnel.node_id}
-                  </p>
-                )}
-              </div>
-              <div className="flex gap-2 ml-2">
-                <button
-                  onClick={() => setEditingTunnel(tunnel)}
-                  className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
-                  title="Edit tunnel"
-                >
-                  <Edit2 size={18} />
-                </button>
-                <button
-                  onClick={() => deleteTunnel(tunnel.id)}
-                  className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
-                  title="Delete tunnel"
-                >
-                  <Trash2 size={18} />
-                </button>
-              </div>
-            </div>
+      <div className="space-y-2">
+        {tunnels.map((tunnel) => {
+          const getPortInfo = () => {
+            const listenPort = tunnel.spec?.listen_port || tunnel.spec?.remote_port || 'N/A'
+            if (tunnel.core === 'rathole') {
+              const ratholePort = tunnel.spec?.remote_addr ? tunnel.spec.remote_addr.split(':')[1] : 'N/A'
+              const localPort = tunnel.spec?.local_addr ? (() => {
+                const parsed = parseAddressPort(tunnel.spec.local_addr)
+                return parsed.port?.toString() || 'N/A'
+              })() : 'N/A'
+              return `Listen: ${listenPort} | Rathole: ${ratholePort} | Local: ${localPort}`
+            } else if (tunnel.core === 'chisel') {
+              const controlPort = tunnel.spec?.control_port || (tunnel.spec?.listen_port ? (parseInt(tunnel.spec.listen_port.toString()) + 10000).toString() : 'N/A')
+              const localPort = tunnel.spec?.local_addr ? (() => {
+                const parsed = parseAddressPort(tunnel.spec.local_addr)
+                return parsed.port?.toString() || 'N/A'
+              })() : 'N/A'
+              return `Listen: ${listenPort} | Control: ${controlPort} | Local: ${localPort}`
+            } else if (tunnel.core === 'gost') {
+              const forwardTo = tunnel.spec?.forward_to || (tunnel.spec?.remote_ip && tunnel.spec?.remote_port ? formatAddressPort(tunnel.spec.remote_ip, tunnel.spec.remote_port) : 'N/A')
+              return `Listen: ${listenPort} | Forward: ${forwardTo}`
+            } else if (tunnel.core === 'frp') {
+              const frpPort = tunnel.spec?.bind_port || '7000'
+              const localPort = tunnel.spec?.local_port || 'N/A'
+              return `Listen: ${listenPort} | FRP: ${frpPort} | Local: ${localPort}`
+            } else if (tunnel.core === 'backhaul') {
+              const info = getBackhaulDisplayInfo(tunnel.spec)
+              return `Control: ${info.controlPort} | Public: ${info.publicPort} | Target: ${info.target}`
+            }
+            return `Listen: ${listenPort}`
+          }
 
-            {/* Error Message */}
-            {tunnel.status === 'error' && tunnel.error_message && (
-              <div className="mb-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-                <p className="text-xs font-medium text-red-800 dark:text-red-200 mb-1">Error</p>
-                <p className="text-sm text-red-700 dark:text-red-300">{tunnel.error_message}</p>
-              </div>
-            )}
-
-            {/* Status Badge */}
-            <div className="mb-4">
-              <span
-                className={`inline-block px-3 py-1 rounded-full text-xs font-medium ${
-                  tunnel.status === 'active'
-                    ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200'
-                    : tunnel.status === 'error'
-                    ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200'
-                    : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
-                }`}
-              >
-                {tunnel.status}
-              </span>
-            </div>
-            
-            {/* Port Details */}
-            <div className="space-y-3 mb-4">
-              <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
-                <span className="text-sm text-gray-500 dark:text-gray-400">Listen Port</span>
-                <span className="text-sm font-medium text-gray-900 dark:text-white">
-                  {tunnel.spec?.listen_port || tunnel.spec?.remote_port || 'N/A'}
+          return (
+            <div
+              key={tunnel.id}
+              className="bg-white dark:bg-gray-800 rounded-lg shadow-sm border border-gray-200 dark:border-gray-700 p-4 transition-all hover:shadow-md"
+            >
+              <div className="flex items-center justify-between gap-4">
+                {/* Status Badge */}
+                <span
+                  className={`px-3 py-1 rounded-full text-xs font-medium whitespace-nowrap ${
+                    tunnel.status === 'active'
+                      ? 'bg-green-100 dark:bg-green-900/30 text-green-800 dark:text-green-200'
+                      : tunnel.status === 'error'
+                      ? 'bg-red-100 dark:bg-red-900/30 text-red-800 dark:text-red-200'
+                      : 'bg-gray-100 dark:bg-gray-700 text-gray-800 dark:text-gray-200'
+                  }`}
+                >
+                  {tunnel.status}
                 </span>
-              </div>
-              {tunnel.core === 'rathole' && (
-                <>
-                  <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
-                    <span className="text-sm text-gray-500 dark:text-gray-400">Rathole Port</span>
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">
-                      {tunnel.spec?.remote_addr ? tunnel.spec.remote_addr.split(':')[1] : 'N/A'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
-                    <span className="text-sm text-gray-500 dark:text-gray-400">Local Port</span>
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">
-                      {tunnel.spec?.local_addr ? (() => {
-                        const parsed = parseAddressPort(tunnel.spec.local_addr)
-                        return parsed.port?.toString() || 'N/A'
-                      })() : 'N/A'}
-                    </span>
-                  </div>
-                </>
-              )}
-              {tunnel.core === 'chisel' && (
-                <>
-                  <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
-                    <span className="text-sm text-gray-500 dark:text-gray-400">Control Port</span>
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">
-                      {tunnel.spec?.control_port || (tunnel.spec?.listen_port ? (parseInt(tunnel.spec.listen_port.toString()) + 10000).toString() : 'N/A')}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
-                    <span className="text-sm text-gray-500 dark:text-gray-400">Local Port</span>
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">
-                      {tunnel.spec?.local_addr ? (() => {
-                        const parsed = parseAddressPort(tunnel.spec.local_addr)
-                        return parsed.port?.toString() || 'N/A'
-                      })() : 'N/A'}
-                    </span>
-                  </div>
-                </>
-              )}
-              {tunnel.core === 'xray' && (tunnel.spec?.forward_to || (tunnel.spec?.remote_ip && tunnel.spec?.remote_port)) && (
-                <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
-                  <span className="text-sm text-gray-500 dark:text-gray-400">Forward To</span>
-                  <span className="text-sm font-medium text-gray-900 dark:text-white break-all ml-2">
-                    {tunnel.spec.forward_to || formatAddressPort(tunnel.spec.remote_ip, tunnel.spec.remote_port)}
-                  </span>
-                </div>
-              )}
-              {tunnel.core === 'frp' && (
-                <>
-                  <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
-                    <span className="text-sm text-gray-500 dark:text-gray-400">FRP Port</span>
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">
-                      {tunnel.spec?.bind_port || '7000'}
-                    </span>
-                  </div>
-                  <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
-                    <span className="text-sm text-gray-500 dark:text-gray-400">Local Port</span>
-                    <span className="text-sm font-medium text-gray-900 dark:text-white">
-                      {tunnel.spec?.local_port || 'N/A'}
-                    </span>
-                  </div>
-                </>
-              )}
-              {tunnel.core === 'backhaul' && (
-                <>
-                  {(() => {
-                    const info = getBackhaulDisplayInfo(tunnel.spec)
-                    return (
-                      <>
-                        <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
-                          <span className="text-sm text-gray-500 dark:text-gray-400">Control Port</span>
-                          <span className="text-sm font-medium text-gray-900 dark:text-white">{info.controlPort}</span>
-                        </div>
-                        <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
-                          <span className="text-sm text-gray-500 dark:text-gray-400">Public Port</span>
-                          <span className="text-sm font-medium text-gray-900 dark:text-white">{info.publicPort}</span>
-                        </div>
-                        <div className="flex justify-between items-center py-2 border-b border-gray-100 dark:border-gray-700">
-                          <span className="text-sm text-gray-500 dark:text-gray-400">Target</span>
-                          <span className="text-sm font-medium text-gray-900 dark:text-white break-all ml-2">{info.target}</span>
-                        </div>
-                      </>
-                    )
-                  })()}
-                </>
-              )}
-            </div>
 
-          </div>
-        ))}
+                {/* Name and Core/Type */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-sm font-semibold text-gray-900 dark:text-white truncate">{tunnel.name}</h3>
+                    <span className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                      {tunnel.core === 'gost' ? 'gost' : tunnel.core} / {tunnel.type}
+                    </span>
+                  </div>
+                  {tunnel.node_id && (
+                    <p className="text-xs text-gray-400 dark:text-gray-500 truncate">
+                      Node: {nodes.find(n => n.id === tunnel.node_id)?.name || tunnel.node_id.substring(0, 8)}
+                    </p>
+                  )}
+                </div>
+
+                {/* Port Info */}
+                <div className="flex-1 text-xs text-gray-600 dark:text-gray-400 truncate hidden md:block">
+                  {getPortInfo()}
+                </div>
+
+                {/* Error Message (if any) */}
+                {tunnel.status === 'error' && tunnel.error_message && (
+                  <div className="flex-1 text-xs text-red-600 dark:text-red-400 truncate max-w-xs">
+                    {tunnel.error_message}
+                  </div>
+                )}
+
+                {/* Action Buttons */}
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setEditingTunnel(tunnel)}
+                    className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"
+                    title="Edit tunnel"
+                  >
+                    <Edit2 size={16} />
+                  </button>
+                  <button
+                    onClick={() => deleteTunnel(tunnel.id)}
+                    className="p-2 text-red-600 hover:bg-red-50 dark:hover:bg-red-900/20 rounded-lg transition-colors"
+                    title="Delete tunnel"
+                  >
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </div>
+              {/* Port Info for mobile */}
+              <div className="mt-2 text-xs text-gray-600 dark:text-gray-400 md:hidden">
+                {getPortInfo()}
+              </div>
+            </div>
+          )
+        })}
       </div>
 
       {showAddModal && (
@@ -501,7 +447,7 @@ const EditTunnelModal = ({ tunnel, onClose, onSuccess }: EditTunnelModalProps) =
         const port = parseInt(formData.port.toString()) || parseInt(formData.rathole_local_port) || 8090
         updatedSpec.remote_port = port
         updatedSpec.listen_port = port
-      } else if (tunnel.core === 'xray' && (tunnel.type === 'tcp' || tunnel.type === 'udp' || tunnel.type === 'grpc' || tunnel.type === 'tcpmux')) {
+      } else if (tunnel.core === 'gost' && (tunnel.type === 'tcp' || tunnel.type === 'udp' || tunnel.type === 'grpc' || tunnel.type === 'tcpmux')) {
         const remoteIp = formData.remote_ip || '127.0.0.1'
         const port = parseInt(formData.port.toString()) || 8080
         updatedSpec.remote_ip = remoteIp
@@ -573,7 +519,7 @@ const EditTunnelModal = ({ tunnel, onClose, onSuccess }: EditTunnelModalProps) =
               required
             />
           </div>
-          {tunnel.core === 'xray' && (tunnel.type === 'tcp' || tunnel.type === 'udp' || tunnel.type === 'grpc' || tunnel.type === 'tcpmux') && (
+          {tunnel.core === 'gost' && (tunnel.type === 'tcp' || tunnel.type === 'udp' || tunnel.type === 'grpc' || tunnel.type === 'tcpmux') && (
             <>
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -931,7 +877,7 @@ interface AddTunnelModalProps {
 const AddTunnelModal = ({ nodes, servers, onClose, onSuccess }: AddTunnelModalProps) => {
   const [formData, setFormData] = useState({
     name: '',
-    core: 'xray',
+    core: 'gost',
     type: 'tcp',
     node_id: '',
     foreign_node_id: '',
@@ -956,7 +902,7 @@ const AddTunnelModal = ({ nodes, servers, onClose, onSuccess }: AddTunnelModalPr
 
   // Auto-populate remote_ip with foreign server IP when GOST is selected
   useEffect(() => {
-    if (formData.core === 'xray' && formData.foreign_node_id) {
+    if (formData.core === 'gost' && formData.foreign_node_id) {
       const selectedServer = servers.find(s => s.id === formData.foreign_node_id)
       if (selectedServer?.metadata?.ip_address) {
         setFormData(prev => ({
@@ -975,7 +921,7 @@ const AddTunnelModal = ({ nodes, servers, onClose, onSuccess }: AddTunnelModalPr
       
       spec.use_ipv6 = formData.use_ipv6 || false
       
-      if (formData.core === 'xray' && (formData.type === 'tcp' || formData.type === 'udp' || formData.type === 'grpc' || formData.type === 'tcpmux')) {
+      if (formData.core === 'gost' && (formData.type === 'tcp' || formData.type === 'udp' || formData.type === 'grpc' || formData.type === 'tcpmux')) {
         const remoteIp = formData.remote_ip || (formData.use_ipv6 ? '::1' : '127.0.0.1')
         const port = parseInt(formData.port.toString()) || 8080
         spec.remote_ip = remoteIp
@@ -1170,7 +1116,7 @@ const AddTunnelModal = ({ nodes, servers, onClose, onSuccess }: AddTunnelModalPr
                 onChange={(e) => handleCoreChange(e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
               >
-                <option value="xray">GOST</option>
+                <option value="gost">GOST</option>
                 <option value="rathole">Rathole</option>
                 <option value="backhaul">Backhaul</option>
                 <option value="chisel">Chisel</option>
@@ -1225,7 +1171,7 @@ const AddTunnelModal = ({ nodes, servers, onClose, onSuccess }: AddTunnelModalPr
             </div>
           </div>
 
-          {formData.core === 'xray' && (formData.type === 'tcp' || formData.type === 'udp' || formData.type === 'grpc' || formData.type === 'tcpmux') && (
+          {formData.core === 'gost' && (formData.type === 'tcp' || formData.type === 'udp' || formData.type === 'grpc' || formData.type === 'tcpmux') && (
             <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -1528,7 +1474,7 @@ const AddTunnelModal = ({ nodes, servers, onClose, onSuccess }: AddTunnelModalPr
           )}
           
           {/* v4 to v6 tunnel checkbox - only for Rathole, Backhaul, Chisel, FRP (not GOST) */}
-          {formData.core !== 'xray' && (
+          {formData.core !== 'gost' && (
             <>
               <div className="flex items-center gap-2">
                 <input

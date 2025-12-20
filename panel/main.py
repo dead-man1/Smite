@@ -18,13 +18,13 @@ from fastapi.staticfiles import StaticFiles
 from app.config import settings
 from app.database import init_db
 from app.routers import nodes, tunnels, panel, status, logs, auth, core_health
-from app.hysteria2_server import Hysteria2Server
+from app.node_server import NodeServer
 from app.gost_forwarder import gost_forwarder
 from app.rathole_server import rathole_server_manager
 from app.backhaul_manager import backhaul_manager
 from app.chisel_server import chisel_server_manager
 from app.frp_server import frp_server_manager
-from app.hysteria2_client import Hysteria2Client
+from app.node_client import NodeClient
 import logging
 
 logging.basicConfig(
@@ -39,12 +39,12 @@ async def lifespan(app: FastAPI):
     """Startup and shutdown events"""
     await init_db()
     
-    h2_server = Hysteria2Server()
+    h2_server = NodeServer()
     await h2_server.start()
     app.state.h2_server = h2_server
     
     try:
-        cert_path = Path(settings.hysteria2_cert_path)
+        cert_path = Path(settings.node_cert_path)
         if not cert_path.is_absolute():
             cert_path = Path(os.getcwd()) / cert_path
         
@@ -57,9 +57,8 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.warning(f"Failed to generate CA certificate on startup: {e}")
     
-    # Generate server CA cert if needed
     try:
-        server_cert_path = Path(settings.hysteria2_server_cert_path)
+        server_cert_path = Path(settings.node_server_cert_path)
         if not server_cert_path.is_absolute():
             server_cert_path = Path(os.getcwd()) / server_cert_path
         
@@ -74,8 +73,6 @@ async def lifespan(app: FastAPI):
     
     app.state.gost_forwarder = gost_forwarder
     
-    # Server managers are kept for backward compatibility but disabled
-    # Servers now run on foreign nodes, not on the panel
     app.state.rathole_server_manager = rathole_server_manager
     app.state.backhaul_manager = backhaul_manager
     app.state.chisel_server_manager = chisel_server_manager
@@ -83,22 +80,13 @@ async def lifespan(app: FastAPI):
     
     await _restore_forwards()
     
-    # Disabled: Servers now run on foreign nodes
-    # await _restore_rathole_servers()
-    # await _restore_backhaul_servers()
-    # await _restore_chisel_servers()
-    # await _restore_frp_servers()
-    
-    # Restore node-side tunnels after panel-side is restored
     await _restore_node_tunnels()
     
-    # Start auto-reset scheduler
     reset_task = asyncio.create_task(_auto_reset_scheduler(app))
     app.state.reset_task = reset_task
     
     yield
     
-    # Cancel reset task
     if hasattr(app.state, 'reset_task'):
         app.state.reset_task.cancel()
         try:
@@ -110,12 +98,6 @@ async def lifespan(app: FastAPI):
         await app.state.h2_server.stop()
     
     gost_forwarder.cleanup_all()
-    
-    # Cleanup disabled: Servers now run on foreign nodes
-    # rathole_server_manager.cleanup_all()
-    # backhaul_manager.cleanup_all()
-    # chisel_server_manager.cleanup_all()
-    # frp_server_manager.cleanup_all()
 
 
 async def _restore_forwards():
@@ -129,7 +111,7 @@ async def _restore_forwards():
             
             for tunnel in tunnels:
                 logger.info(f"Checking tunnel {tunnel.id}: type={tunnel.type}, core={tunnel.core}")
-                needs_gost_forwarding = tunnel.type in ["tcp", "udp", "ws", "grpc", "tcpmux"] and tunnel.core == "xray"
+                needs_gost_forwarding = tunnel.type in ["tcp", "udp", "ws", "grpc", "tcpmux"] and tunnel.core == "gost"
                 if not needs_gost_forwarding:
                     continue
                 
@@ -299,7 +281,6 @@ async def _restore_node_tunnels():
             result = await db.execute(select(Tunnel).where(Tunnel.status == "active"))
             tunnels = result.scalars().all()
             
-            # Filter tunnels that need node-side restoration (reverse tunnels)
             reverse_tunnels = [t for t in tunnels if t.core in ["rathole", "backhaul", "chisel", "frp"]]
             
             if not reverse_tunnels:
@@ -308,32 +289,26 @@ async def _restore_node_tunnels():
             
             logger.info(f"Found {len(reverse_tunnels)} active reverse tunnels to restore")
             
-            client = Hysteria2Client()
+            client = NodeClient()
             
             for tunnel in reverse_tunnels:
                 try:
-                    # For dual-node architecture, we need both foreign and iran nodes
-                    # tunnel.node_id is set to iran_node, so we need to find foreign node
                     iran_node = None
                     foreign_node = None
                     
-                    # Get iran node from tunnel.node_id
                     if tunnel.node_id:
                         result = await db.execute(select(Node).where(Node.id == tunnel.node_id))
                         iran_node = result.scalar_one_or_none()
                         if iran_node and iran_node.node_metadata.get("role") != "iran":
-                            # If node_id points to foreign node, swap them
                             foreign_node = iran_node
                             iran_node = None
                     
-                    # Find foreign node if not found
                     if not foreign_node:
                         result = await db.execute(select(Node).where(Node.node_metadata["role"].astext == "foreign"))
                         foreign_nodes = result.scalars().all()
                         if foreign_nodes:
-                            foreign_node = foreign_nodes[0]  # Use first available foreign node
+                            foreign_node = foreign_nodes[0]
                     
-                    # Find iran node if not found
                     if not iran_node:
                         if tunnel.node_id:
                             result = await db.execute(select(Node).where(Node.id == tunnel.node_id))
@@ -342,14 +317,12 @@ async def _restore_node_tunnels():
                             result = await db.execute(select(Node).where(Node.node_metadata["role"].astext == "iran"))
                             iran_nodes = result.scalars().all()
                             if iran_nodes:
-                                iran_node = iran_nodes[0]  # Use first available iran node
+                                iran_node = iran_nodes[0]
                     
                     if not foreign_node or not iran_node:
                         logger.warning(f"Tunnel {tunnel.id}: Missing foreign or iran node, skipping restore")
                         continue
                     
-                    # Prepare server config for iran node and client config for foreign node (Iran = SERVER, Foreign = CLIENT)
-                    # Use the same logic as create_tunnel
                     server_spec = tunnel.spec.copy() if tunnel.spec else {}
                     server_spec["mode"] = "server"
                     
