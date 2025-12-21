@@ -22,8 +22,6 @@ async def get_ca_cert(download: bool = False):
         base_dir = Path(os.getcwd())
         cert_path = base_dir / cert_path
     
-    logger.debug(f"Looking for certificate at: {cert_path} (exists: {cert_path.exists()})")
-    
     cert_path.parent.mkdir(parents=True, exist_ok=True)
     
     needs_generation = False
@@ -50,7 +48,6 @@ async def get_ca_cert(download: bool = False):
     
     try:
         cert_content = cert_path.read_text()
-        logger.debug(f"Certificate file size: {len(cert_content)} bytes")
         if not cert_content or not cert_content.strip():
             raise HTTPException(status_code=500, detail="CA certificate is empty after generation")
     except Exception as e:
@@ -81,8 +78,6 @@ async def get_server_ca_cert(download: bool = False):
         base_dir = Path(os.getcwd())
         cert_path = base_dir / cert_path
     
-    logger.debug(f"Looking for server certificate at: {cert_path} (exists: {cert_path.exists()})")
-    
     cert_path.parent.mkdir(parents=True, exist_ok=True)
     
     needs_generation = False
@@ -109,7 +104,6 @@ async def get_server_ca_cert(download: bool = False):
     
     try:
         cert_content = cert_path.read_text()
-        logger.debug(f"Server certificate file size: {len(cert_content)} bytes")
         if not cert_content or not cert_content.strip():
             raise HTTPException(status_code=500, detail="Server CA certificate is empty after generation")
     except Exception as e:

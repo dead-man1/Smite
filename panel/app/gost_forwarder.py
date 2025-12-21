@@ -296,7 +296,7 @@ class GostForwarder:
                 try:
                     subprocess.run(['pkill', '-f', f'gost.*{local_port}'], timeout=3, check=False, stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
                 except Exception as e:
-                    logger.debug(f"Could not cleanup port {local_port} (non-critical): {e}")
+                    pass
         
         if tunnel_id in self.forward_configs:
             del self.forward_configs[tunnel_id]

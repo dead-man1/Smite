@@ -141,10 +141,9 @@ class PortForwarder:
                             except:
                                 break
                         except (ConnectionResetError, BrokenPipeError, OSError, ConnectionAbortedError) as e:
-                            logger.debug(f"Connection {direction} reset: {e}")
                             break
                 except Exception as e:
-                    logger.debug(f"Forwarding {direction} closed: {e}")
+                    pass
                 finally:
                     try:
                         if not dst_writer.is_closing():
@@ -159,7 +158,7 @@ class PortForwarder:
                 return_exceptions=True
             )
         except Exception as e:
-            logger.debug(f"Error handling client connection: {e}")
+            pass
         finally:
             try:
                 writer.close()

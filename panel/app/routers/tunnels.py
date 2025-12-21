@@ -26,8 +26,6 @@ def prepare_frp_spec_for_node(spec: dict, node: Node, request: Request) -> dict:
     panel_address = node.node_metadata.get("panel_address", "")
     panel_host = None
     
-    logger.debug(f"FRP tunnel: node metadata panel_address={panel_address}, node_metadata keys={list(node.node_metadata.keys())}")
-    
     if panel_address:
         if "://" in panel_address:
             panel_address = panel_address.split("://", 1)[1]
@@ -35,7 +33,6 @@ def prepare_frp_spec_for_node(spec: dict, node: Node, request: Request) -> dict:
             panel_host = panel_address.split(":")[0]
         else:
             panel_host = panel_address
-            logger.debug(f"FRP tunnel: parsed panel_host from panel_address: {panel_host}")
     
     if not panel_host or panel_host in ["localhost", "127.0.0.1", "::1", "0.0.0.0"]:
         panel_host = spec_for_node.get("panel_host")
@@ -44,26 +41,22 @@ def prepare_frp_spec_for_node(spec: dict, node: Node, request: Request) -> dict:
                 panel_host = panel_host.split("://", 1)[1]
             if ":" in panel_host:
                 panel_host = panel_host.split(":")[0]
-            logger.debug(f"FRP tunnel: using panel_host from spec: {panel_host}")
     
     if not panel_host or panel_host in ["localhost", "127.0.0.1", "::1", "0.0.0.0"]:
         forwarded_host = request.headers.get("X-Forwarded-Host")
         if forwarded_host:
             panel_host = forwarded_host.split(":")[0] if ":" in forwarded_host else forwarded_host
-            logger.debug(f"FRP tunnel: using panel_host from X-Forwarded-Host: {panel_host}")
     
     if not panel_host or panel_host in ["localhost", "127.0.0.1", "::1", "0.0.0.0"]:
         request_host = request.url.hostname if request.url else None
         if request_host and request_host not in ["localhost", "127.0.0.1", "::1", "0.0.0.0", ""]:
             panel_host = request_host
-            logger.debug(f"FRP tunnel: using panel_host from request.url.hostname: {panel_host}")
     
     if not panel_host or panel_host in ["localhost", "127.0.0.1", "::1", "0.0.0.0"]:
         import os
         panel_public_ip = os.getenv("PANEL_PUBLIC_IP") or os.getenv("PANEL_IP")
         if panel_public_ip and panel_public_ip not in ["localhost", "127.0.0.1", "::1", "0.0.0.0", ""]:
             panel_host = panel_public_ip
-            logger.debug(f"FRP tunnel: using panel_host from environment: {panel_host}")
     
     if not panel_host or panel_host in ["localhost", "127.0.0.1", "::1", "0.0.0.0", ""]:
         error_details = {
@@ -169,16 +162,18 @@ async def create_tunnel(tunnel: TunnelCreate, request: Request, db: AsyncSession
             node_role = provided_node.node_metadata.get("role", "iran")
             if node_role == "foreign":
                 foreign_node = provided_node
-                result = await db.execute(select(Node).where(Node.node_metadata["role"].astext == "iran"))
-                iran_nodes = result.scalars().all()
+                result = await db.execute(select(Node))
+                all_nodes = result.scalars().all()
+                iran_nodes = [n for n in all_nodes if n.node_metadata and n.node_metadata.get("role") == "iran"]
                 if iran_nodes:
                     iran_node = iran_nodes[0]
                 else:
                     raise HTTPException(status_code=400, detail="No iran node found. Please specify iran_node_id or register an iran node.")
             else:
                 iran_node = provided_node
-                result = await db.execute(select(Node).where(Node.node_metadata["role"].astext == "foreign"))
-                foreign_nodes = result.scalars().all()
+                result = await db.execute(select(Node))
+                all_nodes = result.scalars().all()
+                foreign_nodes = [n for n in all_nodes if n.node_metadata and n.node_metadata.get("role") == "foreign"]
                 if foreign_nodes:
                     foreign_node = foreign_nodes[0]
                 else:
