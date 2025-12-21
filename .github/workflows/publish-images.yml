@@ -117,8 +117,9 @@ jobs:
           tags: |
             type=ref,event=branch,enable=${{ github.ref != 'refs/heads/main' }}
             type=ref,event=pr
-            type=semver,pattern={{version}},enable=${{ steps.has-version.outputs.has_version == 'true' }}
-            type=semver,pattern={{major}}.{{minor}},enable=${{ steps.has-version.outputs.has_version == 'true' }}
+            type=semver,pattern={{version}},enable=${{ github.ref_type == 'tag' && steps.has-version.outputs.has_version == 'true' }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ github.ref_type == 'tag' && steps.has-version.outputs.has_version == 'true' }}
+            type=raw,value=${{ steps.version.outputs.version }},enable=${{ steps.has-version.outputs.has_version == 'true' && steps.version.outputs.version != 'latest' }}
             type=sha,enable=${{ github.ref != 'refs/heads/main' }}
             type=raw,value=latest,enable=${{ steps.tag-latest.outputs.should_tag == 'true' }}
 
@@ -145,8 +146,9 @@ jobs:
           tags: |
             type=ref,event=branch,enable=${{ github.ref != 'refs/heads/main' }}
             type=ref,event=pr
-            type=semver,pattern={{version}},enable=${{ steps.has-version.outputs.has_version == 'true' }}
-            type=semver,pattern={{major}}.{{minor}},enable=${{ steps.has-version.outputs.has_version == 'true' }}
+            type=semver,pattern={{version}},enable=${{ github.ref_type == 'tag' && steps.has-version.outputs.has_version == 'true' }}
+            type=semver,pattern={{major}}.{{minor}},enable=${{ github.ref_type == 'tag' && steps.has-version.outputs.has_version == 'true' }}
+            type=raw,value=${{ steps.version.outputs.version }},enable=${{ steps.has-version.outputs.has_version == 'true' && steps.version.outputs.version != 'latest' }}
             type=sha,enable=${{ github.ref != 'refs/heads/main' }}
             type=raw,value=latest,enable=${{ steps.tag-latest.outputs.should_tag == 'true' }}
 
