@@ -43,6 +43,12 @@ async def get_core_health(request: Request, db: AsyncSession = Depends(get_db)):
     """Get health status for all cores"""
     health_data = []
     
+    result = await db.execute(select(Node))
+    all_nodes = result.scalars().all()
+    
+    iran_nodes_all = {n.id: n for n in all_nodes if n.node_metadata and n.node_metadata.get("role") == "iran"}
+    foreign_nodes_all = {n.id: n for n in all_nodes if n.node_metadata and n.node_metadata.get("role") == "foreign"}
+    
     for core in CORES:
         result = await db.execute(select(Tunnel).where(Tunnel.core == core, Tunnel.status == "active"))
         active_tunnels = result.scalars().all()
@@ -53,20 +59,12 @@ async def get_core_health(request: Request, db: AsyncSession = Depends(get_db)):
             if tunnel.spec and tunnel.spec.get("foreign_node_id"):
                 node_ids.add(tunnel.spec.get("foreign_node_id"))
         
-        if node_ids:
-            result = await db.execute(select(Node).where(Node.id.in_(node_ids)))
-            nodes_to_check = result.scalars().all()
-        else:
-            nodes_to_check = []
-        
         iran_nodes = {}
         foreign_nodes = {}
         
         client = NodeClient()
-        for node in nodes_to_check:
-            node_role = node.node_metadata.get("role", "iran") if node.node_metadata else "iran"
-            node_id = node.id
-            
+        
+        for node_id, node in iran_nodes_all.items():
             connection_status = {
                 "status": "failed",
                 "error_message": None
@@ -97,14 +95,48 @@ async def get_core_health(request: Request, db: AsyncSession = Depends(get_db)):
             node_info = {
                 "id": node_id,
                 "name": node.name,
-                "role": node_role,
+                "role": "iran",
                 **connection_status
             }
             
-            if node_role == "iran":
-                iran_nodes[node_id] = node_info
-            else:
-                foreign_nodes[node_id] = node_info
+            iran_nodes[node_id] = node_info
+        
+        for node_id, node in foreign_nodes_all.items():
+            connection_status = {
+                "status": "failed",
+                "error_message": None
+            }
+            
+            try:
+                response = await client.get_tunnel_status(node_id, "")
+                if response and response.get("status") == "ok":
+                    connection_status["status"] = "connected"
+                else:
+                    error_msg = response.get("message", "Node disconnected") if response else "Node not responding"
+                    if "timeout" in error_msg.lower() or "connection" in error_msg.lower():
+                        connection_status["status"] = "reconnecting"
+                    else:
+                        connection_status["status"] = "failed"
+                    connection_status["error_message"] = error_msg
+            except httpx.ConnectError:
+                connection_status["status"] = "connecting"
+                connection_status["error_message"] = "Connecting to node..."
+            except httpx.TimeoutException:
+                connection_status["status"] = "reconnecting"
+                connection_status["error_message"] = "Connection timeout"
+            except Exception as e:
+                logger.error(f"Error checking {core} server {node_id} health: {e}")
+                connection_status["status"] = "failed"
+                connection_status["error_message"] = str(e)
+            
+            node_info = {
+                "id": node_id,
+                "name": node.name,
+                "role": "foreign",
+                **connection_status
+            }
+            
+            foreign_nodes[node_id] = node_info
         
         health_data.append(CoreHealthResponse(
             core=core,

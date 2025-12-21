@@ -139,6 +139,12 @@ const Dashboard = () => {
             >
               Add Node
             </button>
+            <button 
+              onClick={() => window.location.href = '/servers?add=true'}
+              className="w-full px-4 py-3 bg-gray-50 dark:bg-gray-700 text-gray-700 dark:text-gray-300 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-600 transition-all duration-200 font-medium border border-gray-200 dark:border-gray-600"
+            >
+              Add Server
+            </button>
           </div>
         </div>
       </div>
