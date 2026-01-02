@@ -7,6 +7,7 @@ import logging
 from pathlib import Path
 from typing import Optional
 from app.config import settings
+from app.frp_comm_client import frp_comm_client
 
 logger = logging.getLogger(__name__)
 
@@ -38,6 +39,7 @@ class PanelClient:
     
     async def stop(self):
         """Stop client"""
+        frp_comm_client.stop()
         if self.client:
             await self.client.aclose()
             self.client = None
@@ -98,6 +100,12 @@ class PanelClient:
                 self.node_id = data.get("id")
                 self.registered = True
                 logger.info(f"Node registered successfully with ID: {self.node_id}")
+                
+                metadata = data.get("metadata", {})
+                frp_config = metadata.get("frp_config")
+                if frp_config and frp_config.get("enabled"):
+                    await self._setup_frp(frp_config)
+                
                 return True
             else:
                 logger.error(f"Registration failed: {response.status_code} - {response.text}")
@@ -108,6 +116,69 @@ class PanelClient:
         except Exception as e:
             logger.error(f"Registration error: {str(e)}")
             return False
+    
+    async def _setup_frp(self, frp_config: dict):
+        """Setup FRP client connection"""
+        try:
+            server_addr = frp_config.get("server_addr")
+            server_port = frp_config.get("server_port", 7000)
+            token = frp_config.get("token")
+            
+            if not server_addr:
+                logger.warning("FRP enabled but server_addr not provided")
+                return
+            
+            logger.info(f"Starting FRP client: server={server_addr}:{server_port}")
+            frp_comm_client.start(server_addr, server_port, token, self.node_id)
+            
+            await asyncio.sleep(3)
+            
+            if frp_comm_client.is_running():
+                config = frp_comm_client.get_config()
+                remote_port = config.get("remote_port")
+                
+                if remote_port:
+                    await self._report_frp_status(remote_port)
+                else:
+                    logger.warning("FRP client started but remote_port not available")
+            else:
+                logger.error("FRP client failed to start")
+        except Exception as e:
+            logger.error(f"Failed to setup FRP: {e}", exc_info=True)
+    
+    async def _report_frp_status(self, remote_port: int):
+        """Report FRP connection status to panel"""
+        if not self.node_id:
+            return
+        
+        try:
+            if "://" in self.panel_address:
+                protocol, rest = self.panel_address.split("://", 1)
+                if ":" in rest:
+                    panel_host, _ = rest.split(":", 1)
+                else:
+                    panel_host = rest
+            else:
+                if ":" in self.panel_address:
+                    panel_host, _ = self.panel_address.split(":", 1)
+                else:
+                    panel_host = self.panel_address
+            
+            panel_api_port = settings.panel_api_port
+            panel_api_url = f"http://{panel_host}:{panel_api_port}"
+            
+            url = f"{panel_api_url}/api/nodes/{self.node_id}/frp-status"
+            response = await self.client.put(url, json={
+                "connected": True,
+                "remote_port": remote_port
+            }, timeout=10.0)
+            
+            if response.status_code == 200:
+                logger.info(f"FRP status reported to panel: remote_port={remote_port}")
+            else:
+                logger.warning(f"Failed to report FRP status: {response.status_code}")
+        except Exception as e:
+            logger.error(f"Error reporting FRP status: {e}")
     
     async def _generate_fingerprint(self):
         """Generate node fingerprint for identification"""

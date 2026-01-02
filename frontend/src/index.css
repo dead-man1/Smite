@@ -2,6 +2,14 @@
 @tailwind components;
 @tailwind utilities;
 
+[dir="rtl"] {
+  direction: rtl;
+}
+
+[dir="ltr"] {
+  direction: ltr;
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
@@ -55,6 +63,16 @@
   }
   body {
     @apply bg-background text-foreground;
+  }
+  
+  [dir="rtl"],
+  [lang="fa"] {
+    font-family: 'Vazirmatn', sans-serif;
+  }
+  
+  [dir="ltr"],
+  [lang="en"] {
+    font-family: system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   }
 }
 

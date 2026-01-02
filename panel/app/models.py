@@ -72,3 +72,13 @@ class CoreResetConfig(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+
+class Settings(Base):
+    __tablename__ = "settings"
+    
+    id = Column(String, primary_key=True, default=generate_uuid)
+    key = Column(String, unique=True, nullable=False)
+    value = Column(JSON, nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+

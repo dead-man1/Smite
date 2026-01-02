@@ -1,7 +1,8 @@
 import { ReactNode, useState, useEffect } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { LayoutDashboard, Network, FileText, Activity, Moon, Sun, Github, Menu, X, LogOut, Settings, Heart, Globe } from 'lucide-react'
+import { LayoutDashboard, Network, FileText, Activity, Moon, Sun, Github, Menu, X, LogOut, Settings, Heart, Globe, Languages } from 'lucide-react'
 import { useAuth } from '../contexts/AuthContext'
+import { useLanguage } from '../contexts/LanguageContext'
 import SmiteLogoDark from '../assets/SmiteD.png'
 import SmiteLogoLight from '../assets/SmiteL.png'
 
@@ -13,6 +14,7 @@ const Layout = ({ children }: LayoutProps) => {
   const location = useLocation()
   const navigate = useNavigate()
   const { logout, username } = useAuth()
+  const { language, setLanguage, dir } = useLanguage()
   const [darkMode, setDarkMode] = useState(() => {
     const saved = localStorage.getItem('darkMode')
     return saved ? JSON.parse(saved) : false
@@ -53,10 +55,11 @@ const Layout = ({ children }: LayoutProps) => {
     { path: '/tunnels', label: 'Tunnels', icon: Activity },
     { path: '/core-health', label: 'Core Health', icon: Heart },
     { path: '/logs', label: 'Logs', icon: FileText },
+    { path: '/settings', label: 'Settings', icon: Settings },
   ]
 
   return (
-    <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+    <div className="min-h-screen bg-gray-50 dark:bg-gray-900" dir={dir}>
       <div className="flex h-screen">
         {/* Mobile Sidebar Overlay */}
         {sidebarOpen && (
@@ -125,24 +128,36 @@ const Layout = ({ children }: LayoutProps) => {
           
           {/* Sidebar Footer */}
           <div className="p-4 border-t border-gray-200 dark:border-gray-700 space-y-2">
-            <div className="flex items-center justify-between px-4 py-2">
-              <button
-                onClick={() => setDarkMode(!darkMode)}
-                className="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
-              >
-                {darkMode ? <Sun size={18} /> : <Moon size={18} />}
-                <span className="text-sm font-medium">{darkMode ? 'Light' : 'Dark'}</span>
-              </button>
-              <button
-                onClick={() => {
-                  logout()
-                  navigate('/login')
-                }}
-                className="flex items-center gap-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
-              >
-                <LogOut size={18} />
-                <span className="text-sm font-medium">Logout</span>
-              </button>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between px-4 py-2">
+                <button
+                  onClick={() => setDarkMode(!darkMode)}
+                  className="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+                >
+                  {darkMode ? <Sun size={18} /> : <Moon size={18} />}
+                  <span className="text-sm font-medium">{darkMode ? 'Light' : 'Dark'}</span>
+                </button>
+                <button
+                  onClick={() => setLanguage(language === 'en' ? 'fa' : 'en')}
+                  className="flex items-center gap-2 text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
+                  title={language === 'en' ? 'Switch to Farsi' : 'Switch to English'}
+                >
+                  <Languages size={18} />
+                  <span className="text-sm font-medium">{language === 'en' ? 'EN' : 'FA'}</span>
+                </button>
+              </div>
+              <div className="px-4">
+                <button
+                  onClick={() => {
+                    logout()
+                    navigate('/login')
+                  }}
+                  className="w-full flex items-center justify-center gap-2 text-red-600 dark:text-red-400 hover:text-red-700 dark:hover:text-red-300 transition-colors"
+                >
+                  <LogOut size={18} />
+                  <span className="text-sm font-medium">Logout</span>
+                </button>
+              </div>
             </div>
             <div className="flex flex-col items-center gap-2 text-xs text-gray-500 dark:text-gray-400 pt-2 border-t border-gray-200 dark:border-gray-700">
               <div className="flex items-center gap-1 flex-wrap justify-center">

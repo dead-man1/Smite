@@ -6,18 +6,41 @@ from pathlib import Path
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
 from app.database import AsyncSessionLocal
-from app.models import Node
+from app.models import Node, Settings
 
 
 class NodeClient:
-    """Client to send requests to nodes via HTTP/HTTPS"""
+    """Client to send requests to nodes via HTTP/HTTPS or FRP"""
     
     def __init__(self):
         self.timeout = httpx.Timeout(30.0)
     
+    async def _get_frp_settings(self) -> Optional[Dict[str, Any]]:
+        """Get FRP communication settings"""
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(select(Settings).where(Settings.key == "frp"))
+            setting = result.scalar_one_or_none()
+            if setting and setting.value and setting.value.get("enabled"):
+                return setting.value
+        return None
+    
+    async def _get_node_address(self, node: Node) -> str:
+        """Get node address (direct or via FRP)"""
+        frp_settings = await self._get_frp_settings()
+        
+        if frp_settings and frp_settings.get("enabled"):
+            frp_remote_port = node.node_metadata.get("frp_remote_port") if node.node_metadata else None
+            if frp_remote_port:
+                return f"http://127.0.0.1:{frp_remote_port}"
+        
+        node_address = node.node_metadata.get("api_address", f"http://localhost:8888") if node.node_metadata else f"http://localhost:8888"
+        if not node_address.startswith("http"):
+            node_address = f"http://{node_address}"
+        return node_address
+    
     async def send_to_node(self, node_id: str, endpoint: str, data: Dict[str, Any]) -> Dict[str, Any]:
         """
-        Send request to node via HTTPS
+        Send request to node via HTTPS or FRP
         """
         async with AsyncSessionLocal() as session:
             result = await session.execute(select(Node).where(Node.id == node_id))
@@ -26,11 +49,7 @@ class NodeClient:
             if not node:
                 return {"status": "error", "message": f"Node {node_id} not found"}
             
-            node_address = node.node_metadata.get("api_address", f"http://localhost:8888") if node.node_metadata else f"http://localhost:8888"
-            
-            if not node_address.startswith("http"):
-                node_address = f"http://{node_address}"
-            
+            node_address = await self._get_node_address(node)
             url = f"{node_address.rstrip('/')}{endpoint}"
             
             try:
@@ -58,11 +77,7 @@ class NodeClient:
             if not node:
                 return {"status": "error", "message": f"Node {node_id} not found"}
             
-            node_address = node.node_metadata.get("api_address", f"http://localhost:8888") if node.node_metadata else f"http://localhost:8888"
-            
-            if not node_address.startswith("http"):
-                node_address = f"http://{node_address}"
-            
+            node_address = await self._get_node_address(node)
             url = f"{node_address.rstrip('/')}/api/agent/status"
             
             try:

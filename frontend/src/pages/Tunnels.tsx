@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { Plus, Trash2, Edit2 } from 'lucide-react'
+import { Plus, Trash2, Edit2, RotateCw } from 'lucide-react'
 import api from '../api/client'
 import { parseAddressPort, formatAddressPort } from '../utils/addressUtils'
 
@@ -224,6 +224,21 @@ const Tunnels = () => {
     }
   }
 
+  const reapplyTunnel = async (tunnel: Tunnel) => {
+    try {
+      const response = await api.post(`/tunnels/${tunnel.id}/apply`)
+      if (response.data && response.data.status === 'success') {
+        fetchData()
+      } else {
+        throw new Error(response.data?.message || 'Failed to reapply tunnel')
+      }
+    } catch (error: any) {
+      console.error('Failed to reapply tunnel:', error)
+      const errorMessage = error.response?.data?.detail || error.message || 'Failed to reapply tunnel'
+      alert(errorMessage)
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -331,6 +346,13 @@ const Tunnels = () => {
 
                 {/* Action Buttons */}
                 <div className="flex gap-2">
+                  <button
+                    onClick={() => reapplyTunnel(tunnel)}
+                    className="p-2 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded-lg transition-colors"
+                    title="Reapply tunnel"
+                  >
+                    <RotateCw size={16} />
+                  </button>
                   <button
                     onClick={() => setEditingTunnel(tunnel)}
                     className="p-2 text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/20 rounded-lg transition-colors"

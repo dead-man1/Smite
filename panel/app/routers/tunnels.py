@@ -1181,25 +1181,148 @@ async def update_tunnel(
 
 @router.post("/{tunnel_id}/apply")
 async def apply_tunnel(tunnel_id: str, request: Request, db: AsyncSession = Depends(get_db)):
-    """Apply tunnel configuration to node"""
+    """Apply tunnel configuration to node(s) - handles both single-node and reverse tunnels"""
     result = await db.execute(select(Tunnel).where(Tunnel.id == tunnel_id))
     tunnel = result.scalar_one_or_none()
     if not tunnel:
         raise HTTPException(status_code=404, detail="Tunnel not found")
+    
+    client = NodeClient()
+    
+    is_reverse_tunnel = tunnel.core in {"rathole", "backhaul", "chisel", "frp"}
+    foreign_node = None
+    iran_node = None
+    
+    if is_reverse_tunnel:
+        iran_node_id = tunnel.node_id
+        result = await db.execute(select(Node).where(Node.id == iran_node_id))
+        iran_node = result.scalar_one_or_none()
+        if not iran_node:
+            raise HTTPException(status_code=404, detail=f"Iran node {iran_node_id} not found")
+        
+        result = await db.execute(select(Node))
+        all_nodes = result.scalars().all()
+        foreign_nodes = [n for n in all_nodes if n.node_metadata and n.node_metadata.get("role") == "foreign"]
+        if not foreign_nodes:
+            raise HTTPException(status_code=404, detail="No foreign node found")
+        foreign_node = foreign_nodes[0]
+        
+        if foreign_node and iran_node:
+            try:
+                spec = tunnel.spec.copy() if tunnel.spec else {}
+                
+                if tunnel.core == "backhaul":
+                    transport = spec.get("transport", "tcp")
+                    control_port = spec.get("control_port") or spec.get("public_port") or spec.get("listen_port") or 3080
+                    public_port = spec.get("public_port") or spec.get("listen_port") or control_port
+                    token = spec.get("token")
+                    
+                    server_spec = spec.copy()
+                    server_spec["bind_addr"] = f"0.0.0.0:{control_port}"
+                    server_spec["control_port"] = control_port
+                    server_spec["public_port"] = public_port
+                    server_spec["listen_port"] = public_port
+                    if "ports" in server_spec and isinstance(server_spec["ports"], list) and len(server_spec["ports"]) > 0:
+                        server_spec["ports"] = [str(public_port)]
+                    if token:
+                        server_spec["token"] = token
+                    
+                    client_spec = spec.copy()
+                    iran_node_ip = iran_node.node_metadata.get("ip_address")
+                    if not iran_node_ip:
+                        tunnel.status = "error"
+                        tunnel.error_message = "Iran node has no IP address"
+                        await db.commit()
+                        raise HTTPException(status_code=400, detail="Iran node has no IP address")
+                    
+                    transport_lower = transport.lower()
+                    if transport_lower in ("ws", "wsmux"):
+                        use_tls = bool(server_spec.get("tls_cert") or server_spec.get("server_options", {}).get("tls_cert"))
+                        protocol = "wss://" if use_tls else "ws://"
+                        client_spec["remote_addr"] = f"{protocol}{iran_node_ip}:{control_port}"
+                    else:
+                        client_spec["remote_addr"] = f"{iran_node_ip}:{control_port}"
+                    client_spec["transport"] = transport
+                    client_spec["type"] = transport
+                    if token:
+                        client_spec["token"] = token
+                
+                if not iran_node.node_metadata.get("api_address"):
+                    iran_node.node_metadata["api_address"] = f"http://{iran_node.node_metadata.get('ip_address', iran_node.fingerprint)}:{iran_node.node_metadata.get('api_port', 8888)}"
+                    await db.commit()
+                
+                logger.info(f"Reapplying tunnel {tunnel.id}: applying server config to iran node {iran_node.id}")
+                server_response = await client.send_to_node(
+                    node_id=iran_node.id,
+                    endpoint="/api/agent/tunnels/apply",
+                    data={
+                        "tunnel_id": tunnel.id,
+                        "core": tunnel.core,
+                        "type": tunnel.type,
+                        "spec": server_spec if tunnel.core == "backhaul" else spec
+                    }
+                )
+                
+                if server_response.get("status") == "error":
+                    tunnel.status = "error"
+                    error_msg = server_response.get("message", "Unknown error from iran node")
+                    tunnel.error_message = f"Iran node error: {error_msg}"
+                    await db.commit()
+                    raise HTTPException(status_code=500, detail=error_msg)
+                
+                if not foreign_node.node_metadata.get("api_address"):
+                    foreign_node.node_metadata["api_address"] = f"http://{foreign_node.node_metadata.get('ip_address', foreign_node.fingerprint)}:{foreign_node.node_metadata.get('api_port', 8888)}"
+                    await db.commit()
+                
+                logger.info(f"Reapplying tunnel {tunnel.id}: applying client config to foreign node {foreign_node.id}")
+                client_response = await client.send_to_node(
+                    node_id=foreign_node.id,
+                    endpoint="/api/agent/tunnels/apply",
+                    data={
+                        "tunnel_id": tunnel.id,
+                        "core": tunnel.core,
+                        "type": tunnel.type,
+                        "spec": client_spec if tunnel.core == "backhaul" else spec
+                    }
+                )
+                
+                if client_response.get("status") == "error":
+                    tunnel.status = "error"
+                    error_msg = client_response.get("message", "Unknown error from foreign node")
+                    tunnel.error_message = f"Foreign node error: {error_msg}"
+                    await db.commit()
+                    raise HTTPException(status_code=500, detail=error_msg)
+                
+                if server_response.get("status") == "success" and client_response.get("status") == "success":
+                    tunnel.status = "active"
+                    tunnel.error_message = None
+                    await db.commit()
+                    return {"status": "applied", "message": "Tunnel reapplied successfully to both nodes"}
+                else:
+                    tunnel.status = "error"
+                    tunnel.error_message = "Failed to apply tunnel to one or both nodes"
+                    await db.commit()
+                    raise HTTPException(status_code=500, detail="Failed to apply tunnel to one or both nodes")
+            except HTTPException:
+                raise
+            except Exception as e:
+                tunnel.status = "error"
+                tunnel.error_message = f"Error: {str(e)}"
+                await db.commit()
+                raise HTTPException(status_code=500, detail=f"Failed to reapply tunnel: {str(e)}")
     
     result = await db.execute(select(Node).where(Node.id == tunnel.node_id))
     node = result.scalar_one_or_none()
     if not node:
         raise HTTPException(status_code=404, detail="Node not found")
     
-    client = NodeClient()
     try:
         if not node.node_metadata.get("api_address"):
             node.node_metadata["api_address"] = f"http://{node.fingerprint}:8888"
             await db.commit()
         
         spec_for_node = tunnel.spec.copy() if tunnel.spec else {}
-        logger.info(f"Applying tunnel {tunnel.id} (core={tunnel.core}): original spec={spec_for_node}")
+        logger.info(f"Reapplying tunnel {tunnel.id} (core={tunnel.core}): original spec={spec_for_node}")
         
         if tunnel.core == "frp":
             try:
@@ -1224,17 +1347,20 @@ async def apply_tunnel(tunnel_id: str, request: Request, db: AsyncSession = Depe
         
         if response.get("status") == "success":
             tunnel.status = "active"
+            tunnel.error_message = None
             await db.commit()
-            return {"status": "applied", "message": "Tunnel applied successfully"}
+            return {"status": "applied", "message": "Tunnel reapplied successfully"}
         else:
             error_msg = response.get("message", "Failed to apply tunnel")
             tunnel.status = "error"
+            tunnel.error_message = error_msg
             await db.commit()
             raise HTTPException(status_code=500, detail=error_msg)
     except HTTPException:
         raise
     except Exception as e:
         tunnel.status = "error"
+        tunnel.error_message = f"Error: {str(e)}"
         await db.commit()
         raise HTTPException(status_code=500, detail=f"Failed to apply tunnel: {str(e)}")
 

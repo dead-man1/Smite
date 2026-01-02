@@ -17,14 +17,17 @@ from fastapi.staticfiles import StaticFiles
 
 from app.config import settings
 from app.database import init_db
-from app.routers import nodes, tunnels, panel, status, logs, auth, core_health
+from app.routers import nodes, tunnels, panel, status, logs, auth, core_health, settings
 from app.node_server import NodeServer
 from app.gost_forwarder import gost_forwarder
 from app.rathole_server import rathole_server_manager
 from app.backhaul_manager import backhaul_manager
 from app.chisel_server import chisel_server_manager
 from app.frp_server import frp_server_manager
+from app.frp_comm_manager import frp_comm_manager
+from app.telegram_bot import telegram_bot
 from app.node_client import NodeClient
+from app.models import Settings
 import logging
 
 logging.basicConfig(
@@ -77,6 +80,10 @@ async def lifespan(app: FastAPI):
     app.state.backhaul_manager = backhaul_manager
     app.state.chisel_server_manager = chisel_server_manager
     app.state.frp_server_manager = frp_server_manager
+    app.state.frp_comm_manager = frp_comm_manager
+    
+    await _load_and_start_frp_comm()
+    await _load_and_start_telegram_bot()
     
     await _restore_forwards()
     
@@ -96,6 +103,11 @@ async def lifespan(app: FastAPI):
     
     if hasattr(app.state, 'h2_server'):
         await app.state.h2_server.stop()
+    
+    if hasattr(app.state, 'frp_comm_manager'):
+        app.state.frp_comm_manager.stop()
+    
+    await telegram_bot.stop()
     
     gost_forwarder.cleanup_all()
 
@@ -656,6 +668,31 @@ async def _restore_node_tunnels():
         logger.error(f"Error restoring node tunnels: {e}", exc_info=True)
 
 
+async def _load_and_start_frp_comm():
+    """Load FRP communication settings and start server if enabled"""
+    try:
+        async with AsyncSessionLocal() as session:
+            result = await session.execute(select(Settings).where(Settings.key == "frp"))
+            setting = result.scalar_one_or_none()
+            if setting and setting.value and setting.value.get("enabled"):
+                port = setting.value.get("port", 7000)
+                token = setting.value.get("token")
+                frp_comm_manager.start(port, token)
+                logger.info(f"FRP communication server started on port {port}")
+            else:
+                logger.info("FRP communication is disabled")
+    except Exception as e:
+        logger.error(f"Error loading FRP communication settings: {e}", exc_info=True)
+
+
+async def _load_and_start_telegram_bot():
+    """Load Telegram bot settings and start bot if enabled"""
+    try:
+        await telegram_bot.start()
+    except Exception as e:
+        logger.error(f"Error starting Telegram bot: {e}", exc_info=True)
+
+
 async def _auto_reset_scheduler(app: FastAPI):
     """Background task to auto-reset cores based on timer configuration"""
     from datetime import datetime, timedelta
@@ -721,6 +758,7 @@ app.include_router(tunnels.router, prefix="/api/tunnels", tags=["tunnels"])
 app.include_router(status.router, prefix="/api/status", tags=["status"])
 app.include_router(logs.router, prefix="/api/logs", tags=["logs"])
 app.include_router(core_health.router, prefix="/api/core-health", tags=["core-health"])
+app.include_router(settings.router)
 
 static_dir = os.path.join(os.path.dirname(__file__), "static")
 static_path = Path(static_dir)

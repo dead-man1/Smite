@@ -8,7 +8,7 @@ from pydantic import BaseModel
 import httpx
 
 from app.database import get_db
-from app.models import Node
+from app.models import Node, Settings
 from app.node_client import NodeClient
 
 
@@ -76,6 +76,30 @@ async def create_node(node: NodeCreate, db: AsyncSession = Depends(get_db)):
         existing.node_metadata["role"] = existing_role
         await db.commit()
         await db.refresh(existing)
+        
+        response_metadata = existing.node_metadata.copy() if existing.node_metadata else {}
+        
+        result = await db.execute(select(Settings).where(Settings.key == "frp"))
+        frp_setting = result.scalar_one_or_none()
+        if frp_setting and frp_setting.value and frp_setting.value.get("enabled"):
+            panel_host = node.metadata.get("panel_address", "").split(":")[0] if node.metadata else ""
+            if not panel_host or panel_host == "panel.example.com":
+                import socket
+                try:
+                    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    s.connect(("8.8.8.8", 80))
+                    panel_host = s.getsockname()[0]
+                    s.close()
+                except:
+                    panel_host = "127.0.0.1"
+            
+            response_metadata["frp_config"] = {
+                "enabled": True,
+                "server_addr": panel_host,
+                "server_port": frp_setting.value.get("port", 7000),
+                "token": frp_setting.value.get("token")
+            }
+        
         return NodeResponse(
             id=existing.id,
             name=existing.name,
@@ -83,7 +107,7 @@ async def create_node(node: NodeCreate, db: AsyncSession = Depends(get_db)):
             status=existing.status,
             registered_at=existing.registered_at,
             last_seen=existing.last_seen,
-            metadata=existing.node_metadata or {}
+            metadata=response_metadata
         )
     
     db_node = Node(
@@ -95,6 +119,30 @@ async def create_node(node: NodeCreate, db: AsyncSession = Depends(get_db)):
     db.add(db_node)
     await db.commit()
     await db.refresh(db_node)
+    
+    response_metadata = db_node.node_metadata.copy() if db_node.node_metadata else {}
+    
+    result = await db.execute(select(Settings).where(Settings.key == "frp"))
+    frp_setting = result.scalar_one_or_none()
+        if frp_setting and frp_setting.value and frp_setting.value.get("enabled"):
+            panel_host = node.metadata.get("panel_address", "").split(":")[0] if node.metadata else ""
+            if not panel_host or panel_host == "panel.example.com":
+                import socket
+                try:
+                    s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
+                    s.connect(("8.8.8.8", 80))
+                    panel_host = s.getsockname()[0]
+                    s.close()
+                except:
+                    panel_host = "127.0.0.1"
+        
+        response_metadata["frp_config"] = {
+            "enabled": True,
+            "server_addr": panel_host,
+            "server_port": frp_setting.value.get("port", 7000),
+            "token": frp_setting.value.get("token")
+        }
+    
     return NodeResponse(
         id=db_node.id,
         name=db_node.name,
@@ -102,7 +150,7 @@ async def create_node(node: NodeCreate, db: AsyncSession = Depends(get_db)):
         status=db_node.status,
         registered_at=db_node.registered_at,
         last_seen=db_node.last_seen,
-        metadata=db_node.node_metadata or {}
+        metadata=response_metadata
     )
 
 
@@ -166,6 +214,29 @@ async def get_node(node_id: str, db: AsyncSession = Depends(get_db)):
         last_seen=node.last_seen,
         metadata=node.node_metadata or {}
     )
+
+
+@router.put("/{node_id}/frp-status")
+async def update_frp_status(node_id: str, frp_status: dict, db: AsyncSession = Depends(get_db)):
+    """Update node FRP connection status"""
+    result = await db.execute(select(Node).where(Node.id == node_id))
+    node = result.scalar_one_or_none()
+    if not node:
+        raise HTTPException(status_code=404, detail="Node not found")
+    
+    if not node.node_metadata:
+        node.node_metadata = {}
+    
+    if frp_status.get("connected") and frp_status.get("remote_port"):
+        node.node_metadata["frp_remote_port"] = frp_status.get("remote_port")
+        node.node_metadata["frp_connected"] = True
+    else:
+        node.node_metadata["frp_connected"] = False
+        node.node_metadata.pop("frp_remote_port", None)
+    
+    await db.commit()
+    await db.refresh(node)
+    return {"status": "success"}
 
 
 @router.delete("/{node_id}")
