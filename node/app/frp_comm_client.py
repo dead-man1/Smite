@@ -155,9 +155,9 @@ proxies:
             except Exception as e:
                 logger.warning(f"Error stopping FRP communication client: {e}")
             finally:
-            self.process = None
-            self.enabled = False
-            logger.info("[FRP] FRP communication client stopped")
+                self.process = None
+                self.enabled = False
+                logger.info("[FRP] FRP communication client stopped")
     
     def is_running(self) -> bool:
         """Check if client is running"""
