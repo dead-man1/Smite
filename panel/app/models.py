@@ -30,6 +30,8 @@ class Tunnel(Base):
     core = Column(String, nullable=False)
     type = Column(String, nullable=False)
     node_id = Column(String, nullable=False)
+    foreign_node_id = Column(String, nullable=True)  # For reverse tunnels: foreign node (server side)
+    iran_node_id = Column(String, nullable=True)  # For reverse tunnels: iran node (client side)
     spec = Column(JSON, nullable=False)
     quota_mb = Column(Float, default=0)
     used_mb = Column(Float, default=0)

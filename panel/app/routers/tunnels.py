@@ -109,6 +109,8 @@ class TunnelResponse(BaseModel):
     core: str
     type: str
     node_id: str
+    foreign_node_id: str | None = None
+    iran_node_id: str | None = None
     spec: dict
     status: str
     error_message: str | None = None
@@ -141,8 +143,8 @@ async def create_tunnel(tunnel: TunnelCreate, request: Request, db: AsyncSession
     
     logger.info(f"Creating tunnel: name={tunnel.name}, type={tunnel.type}, core={tunnel.core}, node_id={tunnel.node_id}")
     
-    # Parse ports from spec if provided
-    if tunnel.spec:
+    # Parse ports from spec if provided (skip for Backhaul as it has its own format)
+    if tunnel.spec and tunnel.core != "backhaul":
         ports = parse_ports_from_spec(tunnel.spec)
         if ports:
             tunnel.spec["ports"] = ports
@@ -210,11 +212,17 @@ async def create_tunnel(tunnel: TunnelCreate, request: Request, db: AsyncSession
     
     tunnel_node_id = tunnel.iran_node_id or tunnel.node_id or ""
     
+    # Store foreign_node_id and iran_node_id for reverse tunnels
+    foreign_node_id_to_store = foreign_node.id if foreign_node else None
+    iran_node_id_to_store = iran_node.id if iran_node else None
+    
     db_tunnel = Tunnel(
         name=tunnel.name,
         core=tunnel.core,
         type=tunnel.type,
         node_id=tunnel_node_id,
+        foreign_node_id=foreign_node_id_to_store,
+        iran_node_id=iran_node_id_to_store,
         spec=tunnel.spec,
         status="pending"
     )
@@ -419,8 +427,18 @@ async def create_tunnel(tunnel: TunnelCreate, request: Request, db: AsyncSession
                 else:
                     # Ensure ports are in the correct format (list of strings like "8080=127.0.0.1:8080")
                     if isinstance(ports, list) and ports:
-                        # If ports is a list of numbers, convert to proper format
-                        if isinstance(ports[0], (int, str)) and str(ports[0]).isdigit():
+                        # Check if ports need conversion (if they're numbers or simple strings without =)
+                        first_port = ports[0]
+                        needs_conversion = False
+                        if isinstance(first_port, int):
+                            needs_conversion = True
+                        elif isinstance(first_port, str):
+                            # If it's a string but doesn't contain '=', it's just a port number
+                            if '=' not in first_port and first_port.isdigit():
+                                needs_conversion = True
+                        
+                        if needs_conversion:
+                            # Convert list of numbers to proper format
                             ports = [f"{p}={target_host}:{p}" for p in ports]
                 
                 bind_ip = server_spec.get("bind_ip") or server_spec.get("listen_ip") or "0.0.0.0"
