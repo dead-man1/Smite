@@ -672,9 +672,18 @@ class ChiselAdapter:
             binary_path = self._resolve_binary_path()
             cmd = [
                 str(binary_path),
-                "client",
-                server_url
+                "client"
             ]
+            
+            auth = spec.get('auth')
+            if auth:
+                cmd.extend(["--auth", auth])
+            
+            fingerprint = spec.get('fingerprint')
+            if fingerprint:
+                cmd.extend(["--fingerprint", fingerprint])
+            
+            cmd.append(server_url)
             
             # Add multiple reverse specs for multiple ports
             for port in ports:
@@ -694,22 +703,15 @@ class ChiselAdapter:
                     reverse_spec = f"R:{port_num}:{host}:{local_port}"
                 cmd.append(reverse_spec)
             
+            reverse_specs = [f"R:{port}:127.0.0.1:{port}" for port in ports]
             logger.info(f"Chisel tunnel {tunnel_id}: ports={ports}, server_url={server_url}")
-            
-            auth = spec.get('auth')
-            if auth:
-                cmd.extend(["--auth", auth])
-            
-            fingerprint = spec.get('fingerprint')
-            if fingerprint:
-                cmd.extend(["--fingerprint", fingerprint])
             
             log_file = self.config_dir / f"{tunnel_id}.log"
             log_f = open(log_file, 'w', buffering=1)
             try:
                 log_f.write(f"Starting chisel client for tunnel {tunnel_id}\n")
                 log_f.write(f"Command: {' '.join(cmd)}\n")
-                log_f.write(f"server_url={server_url}, reverse_spec={reverse_spec}\n")
+                log_f.write(f"server_url={server_url}, reverse_specs={', '.join(reverse_specs)}\n")
                 log_f.flush()
                 proc = subprocess.Popen(
                     cmd,

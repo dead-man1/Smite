@@ -110,6 +110,24 @@ def cmd_status(args):
 def cmd_update(args):
     """Update node (pull images and recreate)"""
     print("Updating node...")
+    compose_file = get_compose_file()
+    node_dir = compose_file.parent
+    
+    if (node_dir / ".git").exists():
+        print("Pulling latest changes from git...")
+        subprocess.run(["git", "pull"], cwd=node_dir, check=False)
+        if (node_dir / "docker-compose.yml").exists():
+            print("docker-compose.yml updated from git")
+    else:
+        print("Downloading latest docker-compose.yml...")
+        try:
+            import urllib.request
+            compose_url = "https://raw.githubusercontent.com/zZedix/Smite/main/node/docker-compose.yml"
+            urllib.request.urlretrieve(compose_url, node_dir / "docker-compose.yml")
+            print("docker-compose.yml updated")
+        except Exception as e:
+            print(f"Warning: Could not update docker-compose.yml: {e}")
+    
     run_docker_compose(["pull"])
     run_docker_compose(["up", "-d", "--force-recreate"])
     print("Node updated.")

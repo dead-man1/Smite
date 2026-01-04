@@ -847,38 +847,20 @@ const EditTunnelModal = ({ tunnel, onClose, onSuccess }: EditTunnelModalProps) =
                   </p>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Token (Optional - Auto-generated if empty)
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.frp_token}
-                    onChange={(e) =>
-                      setFormData({ ...formData, frp_token: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
-                    placeholder="Leave empty for auto-generation"
-                  />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Authentication token (will be auto-generated if not provided)</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Local IP
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.frp_local_ip}
-                    onChange={(e) =>
-                      setFormData({ ...formData, frp_local_ip: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
-                    placeholder="127.0.0.1"
-                    required
-                  />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Local service IP address</p>
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Token (Optional - Auto-generated if empty)
+                </label>
+                <input
+                  type="text"
+                  value={formData.frp_token}
+                  onChange={(e) =>
+                    setFormData({ ...formData, frp_token: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
+                  placeholder="Leave empty for auto-generation"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Authentication token (will be auto-generated if not provided)</p>
               </div>
             </>
           )}
@@ -1486,38 +1468,20 @@ const AddTunnelModal = ({ nodes, servers, onClose, onSuccess }: AddTunnelModalPr
                   </p>
                 </div>
               </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Token (Optional - Auto-generated if empty)
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.frp_token}
-                    onChange={(e) =>
-                      setFormData({ ...formData, frp_token: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
-                    placeholder="Leave empty for auto-generation"
-                  />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Authentication token (will be auto-generated if not provided)</p>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Local IP
-                  </label>
-                  <input
-                    type="text"
-                    value={formData.frp_local_ip}
-                    onChange={(e) =>
-                      setFormData({ ...formData, frp_local_ip: e.target.value })
-                    }
-                    className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
-                    placeholder="127.0.0.1"
-                    required
-                  />
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Local service IP address</p>
-                </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                  Token (Optional - Auto-generated if empty)
+                </label>
+                <input
+                  type="text"
+                  value={formData.frp_token}
+                  onChange={(e) =>
+                    setFormData({ ...formData, frp_token: e.target.value })
+                  }
+                  className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
+                  placeholder="Leave empty for auto-generation"
+                />
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Authentication token (will be auto-generated if not provided)</p>
               </div>
             </>
           )}
@@ -1538,7 +1502,7 @@ const AddTunnelModal = ({ nodes, servers, onClose, onSuccess }: AddTunnelModalPr
                 </label>
               </div>
               <p className="text-xs text-gray-500 dark:text-gray-400 -mt-2">
-                Enable this to create a tunnel from IPv4 (panel) to IPv6 (node/target). Panel listens on IPv4, target uses IPv6.
+                Enable this to create a tunnel from IPv4 (iran node) to IPv6 (node/target). Iran node listens on IPv4, target uses IPv6.
               </p>
             </>
           )}
@@ -1585,39 +1549,22 @@ function BackhaulForm({
 }) {
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Control Port
-          </label>
-          <input
-            type="number"
-            value={state.control_port}
-            onChange={(e) => onChange({ control_port: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
-            placeholder="3080"
-            min={1}
-            max={65535}
-          />
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Port where the node connects back to the panel.
-          </p>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Public Host
-          </label>
-          <input
-            type="text"
-            value={state.public_host}
-            onChange={(e) => onChange({ public_host: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
-            placeholder={typeof window !== 'undefined' ? window.location.hostname : 'panel.example.com'}
-          />
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Hostname clients and nodes will use (defaults to current hostname).
-          </p>
-        </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          Control Port
+        </label>
+        <input
+          type="number"
+          value={state.control_port}
+          onChange={(e) => onChange({ control_port: e.target.value })}
+          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
+          placeholder="3080"
+          min={1}
+          max={65535}
+        />
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+          Port where the node connects back to the panel.
+        </p>
       </div>
 
       <div>
@@ -1637,68 +1584,19 @@ function BackhaulForm({
           Ports (comma-separated, same for public port and target port)
         </p>
       </div>
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Bind IP (Public)
-          </label>
-          <input
-            type="text"
-            value={state.listen_ip}
-            onChange={(e) => onChange({ listen_ip: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
-            placeholder="0.0.0.0"
-          />
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Optional specific IP for public listeners (default 0.0.0.0).
-          </p>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Target Host
-          </label>
-          <input
-            type="text"
-            value={state.target_host}
-            onChange={(e) => onChange({ target_host: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
-            placeholder="127.0.0.1"
-          />
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Destination host reachable from the node.
-          </p>
-        </div>
-      </div>
 
-      <div className="grid grid-cols-2 gap-4">
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Override Control Address
-          </label>
-          <input
-            type="text"
-            value={state.remote_addr}
-            onChange={(e) => onChange({ remote_addr: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
-            placeholder="panel.example.com:3080"
-          />
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            Optional: override the control address the node should dial.
-          </p>
-        </div>
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Token (Optional - Auto-generated if empty)
-          </label>
-          <input
-            type="text"
-            value={state.token}
-            onChange={(e) => onChange({ token: e.target.value })}
-            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
-            placeholder="Leave empty for auto-generation"
-          />
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Authentication token (will be auto-generated if not provided)</p>
-        </div>
+      <div>
+        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+          Token (Optional - Auto-generated if empty)
+        </label>
+        <input
+          type="text"
+          value={state.token}
+          onChange={(e) => onChange({ token: e.target.value })}
+          className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-700 dark:text-white"
+          placeholder="Leave empty for auto-generation"
+        />
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Authentication token (will be auto-generated if not provided)</p>
       </div>
 
       {acceptUdpVisible && (

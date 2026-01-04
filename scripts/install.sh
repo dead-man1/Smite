@@ -164,10 +164,6 @@ SMITE_VERSION=${SMITE_VERSION:-latest}
 DB_TYPE=$DB_TYPE
 DB_PATH=./data/smite.db
 
-HYSTERIA2_PORT=4443
-HYSTERIA2_CERT_PATH=./certs/ca.crt
-HYSTERIA2_KEY_PATH=./certs/ca.key
-
 SECRET_KEY=$(openssl rand -hex 32)
 EOF
 

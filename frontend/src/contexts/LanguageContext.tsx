@@ -315,7 +315,7 @@ const translations: Record<Language, Translations> = {
       core: 'هسته',
       ports: 'پورت‌ها',
       portsDescription: 'پورت‌ها (جدا شده با کاما، یکسان برای پنل و سرور هدف)',
-      remoteIP: 'IP از راه دور',
+      remoteIP: 'ip مقصد',
       remoteIPDescription: 'آدرس IP سرور هدف (IPv4 یا IPv6)',
       selectForeignServer: 'یک سرور خارجی انتخاب کنید',
       selectIranNode: 'یک نود ایران انتخاب کنید',

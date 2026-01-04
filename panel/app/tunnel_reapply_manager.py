@@ -142,8 +142,29 @@ class TunnelReapplyManager:
                         spec = tunnel.spec.copy() if tunnel.spec else {}
                         
                         if tunnel.core == "frp":
-                            spec_for_iran = prepare_frp_spec_for_node(spec, iran_node, fake_request)
-                            spec_for_foreign = prepare_frp_spec_for_node(spec, foreign_node, fake_request)
+                            bind_port = spec.get("bind_port", 7000)
+                            token = spec.get("token")
+                            
+                            iran_node_ip = iran_node.node_metadata.get("ip_address")
+                            if not iran_node_ip:
+                                logger.warning(f"Tunnel {tunnel.id}: Iran node has no IP address, skipping")
+                                failed += 1
+                                continue
+                            
+                            spec_for_iran = spec.copy()
+                            spec_for_iran["bind_port"] = bind_port
+                            if token:
+                                spec_for_iran["token"] = token
+                            
+                            spec_for_foreign = spec.copy()
+                            spec_for_foreign["server_addr"] = iran_node_ip
+                            spec_for_foreign["server_port"] = bind_port
+                            if token:
+                                spec_for_foreign["token"] = token
+                            tunnel_type = tunnel.type.lower() if tunnel.type else "tcp"
+                            if tunnel_type not in ["tcp", "udp"]:
+                                tunnel_type = "tcp"
+                            spec_for_foreign["type"] = tunnel_type
                             
                             server_response = await client.send_to_node(
                                 node_id=iran_node.id,

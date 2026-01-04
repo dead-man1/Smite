@@ -699,6 +699,15 @@ def cmd_status(args):
 def cmd_update(args):
     """Update panel (pull images and recreate)"""
     print("Updating panel...")
+    compose_file = get_compose_file()
+    project_root = compose_file.parent
+    
+    if (project_root / ".git").exists():
+        print("Pulling latest changes from git...")
+        subprocess.run(["git", "pull"], cwd=project_root, check=False)
+        if (project_root / "docker-compose.yml").exists():
+            print("docker-compose.yml updated from git")
+    
     run_docker_compose(["pull"])
     run_docker_compose(["up", "-d", "--force-recreate"])
     print("Panel updated.")
