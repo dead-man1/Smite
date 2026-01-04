@@ -246,8 +246,6 @@ class TelegramBot:
             self.application.add_handler(CommandHandler("status", self.cmd_status))
             self.application.add_handler(CommandHandler("backup", self.cmd_backup))
             self.application.add_handler(CommandHandler("logs", self.cmd_logs))
-            self.application.add_handler(add_node_conv)
-            self.application.add_handler(remove_node_conv)
             self.application.add_handler(create_tunnel_conv)
             self.application.add_handler(remove_tunnel_conv)
             self.application.add_handler(CallbackQueryHandler(self.handle_callback))
