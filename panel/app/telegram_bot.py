@@ -408,7 +408,7 @@ class TelegramBot:
                 KeyboardButton(f"🌐 {self.t(user_id, 'language')}")
             ],
         ]
-        return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, persistent=True, one_time_keyboard=False)
+        return ReplyKeyboardMarkup(keyboard, resize_keyboard=True, one_time_keyboard=False)
     
     async def show_main_menu(self, message_or_query):
         """Show main menu with persistent keyboard buttons"""
