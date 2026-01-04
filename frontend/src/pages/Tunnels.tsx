@@ -1005,11 +1005,16 @@ const AddTunnelModal = ({ nodes, servers, onClose, onSuccess }: AddTunnelModalPr
           return
         }
         // Update backhaulState with ports from formData
+        // CRITICAL: formData.ports contains comma-separated ports (e.g., "8080,8081,8082")
+        // We MUST use formData.ports, not backhaulState.public_port which might have a default value
+        console.log('Backhaul tunnel creation - formData.ports:', formData.ports, 'type:', typeof formData.ports)
+        console.log('Backhaul tunnel creation - backhaulState.public_port (before override):', backhaulState.public_port)
         const updatedBackhaulState = {
           ...backhaulState,
-          public_port: formData.ports,
-          target_port: formData.ports
+          public_port: formData.ports || backhaulState.public_port,  // Use formData.ports, fallback to backhaulState.public_port
+          target_port: formData.ports || backhaulState.target_port
         }
+        console.log('Backhaul tunnel creation - updatedBackhaulState.public_port (after override):', updatedBackhaulState.public_port)
         spec = buildBackhaulSpec(updatedBackhaulState, backhaulAdvanced)
         spec.use_ipv6 = formData.use_ipv6 || false
         // buildBackhaulSpec should already build ports array from public_port (formData.ports)
@@ -2012,16 +2017,25 @@ function buildBackhaulSpec(
   
   // Parse comma-separated ports from public_port
   const parsePortsFromString = (portStr: string): number[] => {
-    return portStr
+    if (!portStr || typeof portStr !== 'string') {
+      console.warn('parsePortsFromString: invalid input:', portStr, 'type:', typeof portStr)
+      return []
+    }
+    const parsed = portStr
       .split(',')
       .map(p => p.trim())
       .filter(p => p)
       .map(p => parseInt(p, 10))
       .filter(p => !isNaN(p) && p > 0 && p <= 65535)
+    console.log('parsePortsFromString: input:', portStr, '-> parsed:', parsed, 'count:', parsed.length)
+    return parsed
   }
   
-  const publicPorts = parsePortsFromString(base.public_port)
-  console.log('buildBackhaulSpec: base.public_port:', base.public_port, '-> parsed publicPorts:', publicPorts, 'count:', publicPorts.length)
+  // CRITICAL: Ensure base.public_port is a string before parsing
+  const publicPortStr = String(base.public_port || '')
+  console.log('buildBackhaulSpec: base.public_port (raw):', base.public_port, 'type:', typeof base.public_port, '-> string:', publicPortStr)
+  const publicPorts = parsePortsFromString(publicPortStr)
+  console.log('buildBackhaulSpec: parsed publicPorts:', publicPorts, 'count:', publicPorts.length)
   const effectivePublicPort = publicPorts.length > 0 ? publicPorts[0] : (!Number.isNaN(publicPort) && publicPort > 0 ? publicPort : effectiveControlPort)
   const effectiveTargetPort = publicPorts.length > 0 ? publicPorts[0] : (!Number.isNaN(targetPort) && targetPort > 0 ? targetPort : effectivePublicPort)
 
