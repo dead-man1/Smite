@@ -376,7 +376,7 @@ const Tunnels = () => {
                         if (tunnel.core === 'chisel') {
                           transmissionType = 'TCP'
                         } else if (tunnel.core === 'rathole') {
-                          const transport = tunnel.spec?.transport || tunnel.spec?.type || 'tcp'
+                          const transport = tunnel.spec?.transport || (tunnel.type && tunnel.type !== 'rathole' ? tunnel.type : 'tcp')
                           transmissionType = transport.toUpperCase()
                         } else if (tunnel.type && tunnel.type.toLowerCase() !== tunnel.core.toLowerCase()) {
                           transmissionType = tunnel.type.toUpperCase()
