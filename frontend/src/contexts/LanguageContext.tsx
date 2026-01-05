@@ -150,8 +150,8 @@ const translations: Record<Language, Translations> = {
       systemResources: 'System Resources',
       quickActions: 'Quick Actions',
       createNewTunnel: 'Create New Tunnel',
-      addNode: 'Add Node',
-      addServer: 'Add Server',
+      addNode: 'Add Iran Server',
+      addServer: 'Add Foreign Server',
       loadingDashboard: 'Loading dashboard...',
     },
     navigation: {
@@ -169,7 +169,7 @@ const translations: Record<Language, Translations> = {
     nodes: {
       title: 'Iran Nodes',
       subtitle: 'Manage your iran nodes',
-      addNode: 'Add Node',
+      addNode: 'Add Iran Server',
       viewCACertificate: 'View CA Certificate',
       downloadCA: 'Download CA',
     },
@@ -275,8 +275,8 @@ const translations: Record<Language, Translations> = {
       systemResources: 'منابع سیستم',
       quickActions: 'اقدامات سریع',
       createNewTunnel: 'ایجاد تونل جدید',
-      addNode: 'افزودن نود',
-      addServer: 'افزودن سرور',
+      addNode: 'افزودن سرور ایران',
+      addServer: 'افزودن سرور خارجی',
       loadingDashboard: 'در حال بارگذاری داشبورد...',
     },
     navigation: {
@@ -294,7 +294,7 @@ const translations: Record<Language, Translations> = {
     nodes: {
       title: 'نودهای ایران',
       subtitle: 'مدیریت نودهای ایران',
-      addNode: 'افزودن نود',
+      addNode: 'افزودن سرور ایران',
       viewCACertificate: 'مشاهده گواهی CA',
       downloadCA: 'دانلود CA',
     },
